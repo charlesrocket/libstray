@@ -1,0 +1,16 @@
+.{
+    .name = .libstray,
+    .version = "0.0.0",
+    .fingerprint = 0xe1114f6eff5c7028,
+    .minimum_zig_version = "0.15.1",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "root.zig",
+        "stray.h",
+        "wrapper.c",
+        "LICENSE",
+        "README.md",
+    },
+}
