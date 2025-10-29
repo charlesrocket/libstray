@@ -2,6 +2,5 @@
 
 🚧
 
-## Roadmap
-- [x] dynamic icons
-- [ ] menu
+* dynamic icons
+* menu
