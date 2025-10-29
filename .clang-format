@@ -3,6 +3,7 @@ IndentCaseLabels: true
 ColumnLimit: 80
 AlignConsecutiveMacros: AcrossEmptyLinesAndComments
 AlignArrayOfStructures: Left
+AlignAfterOpenBracket: AlwaysBreak
 AllowShortBlocksOnASingleLine: Always
 AllowAllArgumentsOnNextLine: true
 AllowAllParametersOfDeclarationOnNextLine: true
