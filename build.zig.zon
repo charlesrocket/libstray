@@ -1,6 +1,6 @@
 .{
     .name = .libstray,
-    .version = "0.0.0",
+    .version = "0.1.0",
     .fingerprint = 0xe1114f6eff5c7028,
     .minimum_zig_version = "0.15.1",
     .dependencies = .{},
