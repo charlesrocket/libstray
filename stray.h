@@ -14,14 +14,14 @@ extern "C" {
 #include <sys/time.h>
 #include <unistd.h>
 
-#define STRAY_OBJECT_PATH "/StatusNotifierItem"
-#define STRAY_INTERFACE_NAME "org.kde.StatusNotifierItem"
+#define STRAY_OBJECT_PATH     "/StatusNotifierItem"
+#define STRAY_INTERFACE_NAME  "org.kde.StatusNotifierItem"
 #define STRAY_WATCHER_SERVICE "org.kde.StatusNotifierWatcher"
-#define STRAY_WATCHER_PATH "/StatusNotifierWatcher"
+#define STRAY_WATCHER_PATH    "/StatusNotifierWatcher"
 
-#define STRAY_DEFAULT_ICON "application-x-executable"
-#define STRAY_DEFAULT_TITLE "My Application"
-#define STRAY_DEFAULT_ID "my-app"
+#define STRAY_DEFAULT_ICON    "application-x-executable"
+#define STRAY_DEFAULT_TITLE   "My Application"
+#define STRAY_DEFAULT_ID      "my-app"
 
 typedef struct TrayIcon TrayIcon;
 typedef void (*TrayClickCallback)(void *user_data);
@@ -29,8 +29,10 @@ typedef void (*TrayClickCallback)(void *user_data);
 /* public API */
 TrayIcon *systray_create(const char *app_name, const char *icon_name,
                          const char *title);
+
 void systray_set_click_callback(TrayIcon *icon, TrayClickCallback callback,
                                 void *user_data);
+
 void systray_process_events(TrayIcon *icon);
 void systray_set_icon(TrayIcon *icon, const char *icon_name);
 void systray_set_title(TrayIcon *icon, const char *title);
@@ -52,9 +54,11 @@ static void add_string_property(DBusMessageIter *array, const char *prop_name,
     DBusMessageIter dict_entry, variant;
     dbus_message_iter_open_container(array, DBUS_TYPE_DICT_ENTRY, NULL,
                                      &dict_entry);
+
     dbus_message_iter_append_basic(&dict_entry, DBUS_TYPE_STRING, &prop_name);
     dbus_message_iter_open_container(&dict_entry, DBUS_TYPE_VARIANT, "s",
                                      &variant);
+
     dbus_message_iter_append_basic(&variant, DBUS_TYPE_STRING, &value);
     dbus_message_iter_close_container(&dict_entry, &variant);
     dbus_message_iter_close_container(array, &dict_entry);
@@ -71,13 +75,13 @@ static void add_empty_pixmap_array(DBusMessageIter *variant) {
     DBusMessageIter pixmap_array;
     dbus_message_iter_open_container(variant, DBUS_TYPE_ARRAY, "(iiay)",
                                      &pixmap_array);
+
     dbus_message_iter_close_container(variant, &pixmap_array);
 }
 
 static void emit_signal(TrayIcon *icon, const char *signal_name) {
     DBusMessage *msg;
-    if (!icon)
-        return;
+    if (!icon) return;
 
     msg = dbus_message_new_signal(STRAY_OBJECT_PATH, STRAY_INTERFACE_NAME,
                                   signal_name);
@@ -95,14 +99,12 @@ static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
     const char *current_icon;
     const char *current_title;
 
-    if (!icon)
-        return;
+    if (!icon) return;
 
     msg = dbus_message_new_signal(STRAY_OBJECT_PATH,
                                   "org.freedesktop.DBus.Properties",
                                   "PropertiesChanged");
-    if (!msg)
-        return;
+    if (!msg) return;
 
     interface = STRAY_INTERFACE_NAME;
 
@@ -131,6 +133,7 @@ static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
     /* empty invalidated properties array */
     dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "s",
                                      &invalidated_props);
+
     dbus_message_iter_close_container(&args, &invalidated_props);
 
     dbus_connection_send(icon->conn, msg, NULL);
@@ -150,8 +153,7 @@ static void handle_property_get_all(DBusConnection *conn, DBusMessage *msg,
     const char *current_title;
     const char *menu_path;
     reply = dbus_message_new_method_return(msg);
-    if (!reply)
-        return;
+    if (!reply) return;
 
     dbus_message_iter_init_append(reply, &args);
     dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "{sv}", &array);
@@ -171,9 +173,11 @@ static void handle_property_get_all(DBusConnection *conn, DBusMessage *msg,
     prop_pixmap = "IconPixmap";
     dbus_message_iter_open_container(&array, DBUS_TYPE_DICT_ENTRY, NULL,
                                      &dict_entry);
+
     dbus_message_iter_append_basic(&dict_entry, DBUS_TYPE_STRING, &prop_pixmap);
     dbus_message_iter_open_container(&dict_entry, DBUS_TYPE_VARIANT, "a(iiay)",
                                      &variant);
+
     add_empty_pixmap_array(&variant);
     dbus_message_iter_close_container(&dict_entry, &variant);
     dbus_message_iter_close_container(&array, &dict_entry);
@@ -182,9 +186,11 @@ static void handle_property_get_all(DBusConnection *conn, DBusMessage *msg,
     prop_menu = "Menu";
     dbus_message_iter_open_container(&array, DBUS_TYPE_DICT_ENTRY, NULL,
                                      &dict_entry);
+
     dbus_message_iter_append_basic(&dict_entry, DBUS_TYPE_STRING, &prop_menu);
     dbus_message_iter_open_container(&dict_entry, DBUS_TYPE_VARIANT, "o",
                                      &variant);
+
     menu_path = "/NO_DBUSMENU";
     dbus_message_iter_append_basic(&variant, DBUS_TYPE_OBJECT_PATH, &menu_path);
     dbus_message_iter_close_container(&dict_entry, &variant);
@@ -194,10 +200,13 @@ static void handle_property_get_all(DBusConnection *conn, DBusMessage *msg,
     prop_item_is_menu = "ItemIsMenu";
     dbus_message_iter_open_container(&array, DBUS_TYPE_DICT_ENTRY, NULL,
                                      &dict_entry);
+
     dbus_message_iter_append_basic(&dict_entry, DBUS_TYPE_STRING,
                                    &prop_item_is_menu);
+
     dbus_message_iter_open_container(&dict_entry, DBUS_TYPE_VARIANT, "b",
                                      &variant);
+
     item_is_menu = FALSE;
     dbus_message_iter_append_basic(&variant, DBUS_TYPE_BOOLEAN, &item_is_menu);
     dbus_message_iter_close_container(&dict_entry, &variant);
@@ -216,8 +225,8 @@ static void handle_property_get(DBusConnection *conn, DBusMessage *msg,
     dbus_bool_t item_is_menu;
     DBusMessageIter args;
     DBusMessage *reply = dbus_message_new_method_return(msg);
-    if (!reply)
-        return;
+
+    if (!reply) return;
 
     dbus_message_iter_init_append(reply, &args);
 
@@ -246,22 +255,27 @@ static void handle_property_get(DBusConnection *conn, DBusMessage *msg,
         DBusMessageIter variant;
         dbus_message_iter_open_container(&args, DBUS_TYPE_VARIANT, "o",
                                          &variant);
+
         menu_path = "/NO_DBUSMENU";
         dbus_message_iter_append_basic(&variant, DBUS_TYPE_OBJECT_PATH,
                                        &menu_path);
+
         dbus_message_iter_close_container(&args, &variant);
     } else if (strcmp(prop, "ItemIsMenu") == 0) {
         DBusMessageIter variant;
         dbus_message_iter_open_container(&args, DBUS_TYPE_VARIANT, "b",
                                          &variant);
+
         item_is_menu = FALSE;
         dbus_message_iter_append_basic(&variant, DBUS_TYPE_BOOLEAN,
                                        &item_is_menu);
+
         dbus_message_iter_close_container(&args, &variant);
     } else {
         DBusMessage *error = dbus_message_new_error(
             msg, "org.freedesktop.DBus.Error.InvalidArgs",
             "Property not found");
+
         dbus_connection_send(conn, error, NULL);
         dbus_message_unref(error);
         dbus_message_unref(reply);
@@ -280,14 +294,12 @@ static DBusHandlerResult message_handler(DBusConnection *conn, DBusMessage *msg,
     DBusMessage *reply;
     TrayIcon *icon = (TrayIcon *)data;
 
-    if (!icon)
-        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    if (!icon) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
     interface = dbus_message_get_interface(msg);
     member = dbus_message_get_member(msg);
 
-    if (!interface || !member)
-        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    if (!interface || !member) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
     /* handle property requests */
     if (strcmp(interface, "org.freedesktop.DBus.Properties") == 0) {
@@ -298,6 +310,7 @@ static DBusHandlerResult message_handler(DBusConnection *conn, DBusMessage *msg,
             const char *iface, *prop;
             dbus_message_get_args(msg, NULL, DBUS_TYPE_STRING, &iface,
                                   DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
+
             handle_property_get(conn, msg, icon, prop);
             return DBUS_HANDLER_RESULT_HANDLED;
         }
@@ -306,9 +319,7 @@ static DBusHandlerResult message_handler(DBusConnection *conn, DBusMessage *msg,
     /* handle Activate method (left-click) */
     if (strcmp(interface, STRAY_INTERFACE_NAME) == 0 &&
         strcmp(member, "Activate") == 0) {
-        if (icon->click_callback) {
-            icon->click_callback(icon->user_data);
-        }
+        if (icon->click_callback) { icon->click_callback(icon->user_data); }
 
         reply = dbus_message_new_method_return(msg);
 
@@ -316,6 +327,7 @@ static DBusHandlerResult message_handler(DBusConnection *conn, DBusMessage *msg,
             dbus_connection_send(conn, reply, NULL);
             dbus_message_unref(reply);
         }
+
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
@@ -327,6 +339,7 @@ static DBusHandlerResult message_handler(DBusConnection *conn, DBusMessage *msg,
             dbus_connection_send(conn, reply, NULL);
             dbus_message_unref(reply);
         }
+
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
@@ -342,8 +355,7 @@ static int register_with_watcher(DBusConnection *conn,
         STRAY_WATCHER_SERVICE, STRAY_WATCHER_PATH, STRAY_WATCHER_SERVICE,
         "RegisterStatusNotifierItem");
 
-    if (!msg)
-        return 0;
+    if (!msg) return 0;
 
     item_path = STRAY_OBJECT_PATH;
     dbus_message_append_args(msg, DBUS_TYPE_STRING, &item_path,
@@ -359,8 +371,7 @@ static int register_with_watcher(DBusConnection *conn,
         return 0;
     }
 
-    if (reply)
-        dbus_message_unref(reply);
+    if (reply) dbus_message_unref(reply);
     return 1;
 }
 
@@ -377,8 +388,7 @@ static void process_events_with_timeout(DBusConnection *conn, int timeout_ms) {
         elapsed_ms = (current_time.tv_sec - start_time.tv_sec) * 1000 +
                      (current_time.tv_usec - start_time.tv_usec) / 1000;
 
-        if (elapsed_ms >= timeout_ms)
-            break;
+        if (elapsed_ms >= timeout_ms) break;
 
         remaining_ms = timeout_ms - elapsed_ms;
 
@@ -417,8 +427,8 @@ TrayIcon *systray_create(const char *app_name, const char *icon_name,
     DBusError err;
     DBusObjectPathVTable vtable;
     int ret;
-    if (!app_name)
-        return NULL;
+
+    if (!app_name) return NULL;
 
     dbus_error_init(&err);
 
@@ -456,15 +466,13 @@ TrayIcon *systray_create(const char *app_name, const char *icon_name,
     icon->conn = conn;
     icon->service_name = strdup(service_name);
 
-    if (!icon->service_name)
-        goto cleanup_icon;
+    if (!icon->service_name) goto cleanup_icon;
 
     /* set initial values */
     icon->icon_name = safe_strdup(icon_name ? icon_name : STRAY_DEFAULT_ICON);
     icon->title = safe_strdup(title ? title : STRAY_DEFAULT_TITLE);
 
-    if (!icon->icon_name || !icon->title)
-        goto cleanup_full;
+    if (!icon->icon_name || !icon->title) goto cleanup_full;
 
     vtable.unregister_function = NULL;
     vtable.message_function = message_handler;
@@ -478,9 +486,7 @@ TrayIcon *systray_create(const char *app_name, const char *icon_name,
     process_events_with_timeout(conn, 100);
 
     /* now register with the watcher - this will trigger property queries */
-    if (!register_with_watcher(conn, service_name)) {
-        goto cleanup_full;
-    }
+    if (!register_with_watcher(conn, service_name)) { goto cleanup_full; }
 
     /* ensure the tray gets the initial state */
     emit_properties_changed(icon, "All");
@@ -521,14 +527,12 @@ void systray_process_events(TrayIcon *icon) {
 }
 
 void systray_set_icon(TrayIcon *icon, const char *icon_name) {
-    if (!icon)
-        return;
+    if (!icon) return;
 
     safe_free(&icon->icon_name);
     icon->icon_name = safe_strdup(icon_name ? icon_name : STRAY_DEFAULT_ICON);
 
-    if (!icon->icon_name)
-        return;
+    if (!icon->icon_name) return;
 
     /* emit signals to notify about the change */
     emit_signal(icon, "NewIcon");
@@ -536,14 +540,12 @@ void systray_set_icon(TrayIcon *icon, const char *icon_name) {
 }
 
 void systray_set_title(TrayIcon *icon, const char *title) {
-    if (!icon)
-        return;
+    if (!icon) return;
 
     safe_free(&icon->title);
     icon->title = safe_strdup(title ? title : STRAY_DEFAULT_TITLE);
 
-    if (!icon->title)
-        return;
+    if (!icon->title) return;
 
     /* emit signals to notify about the change */
     emit_signal(icon, "NewTitle");
@@ -551,16 +553,13 @@ void systray_set_title(TrayIcon *icon, const char *title) {
 }
 
 void systray_destroy(TrayIcon *icon) {
-    if (!icon)
-        return;
+    if (!icon) return;
 
     safe_free(&icon->service_name);
     safe_free(&icon->icon_name);
     safe_free(&icon->title);
 
-    if (icon->conn) {
-        dbus_connection_unref(icon->conn);
-    }
+    if (icon->conn) { dbus_connection_unref(icon->conn); }
 
     free(icon);
 }
