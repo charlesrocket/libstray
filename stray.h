@@ -40,7 +40,7 @@ typedef enum {
     STRAY_MENU_ITEM_RADIO = 3
 } TrayMenuItemType;
 
-/* public API */
+/* Icon API */
 TrayIcon *
 stray_create(const char *app_name, const char *icon_name, const char *title);
 void stray_set_click_callback(
