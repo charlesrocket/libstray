@@ -54,7 +54,7 @@ pub const TrayIcon = struct {
     /// Sets the click callback.
     pub fn setClickCallback(self: TrayIcon, callback: ClickCallback, user_data: ?*anyopaque) void {
         const Wrapper = struct {
-            fn call(data: ?*anyopaque) callconv(.C) void {
+            fn call(data: ?*anyopaque) callconv(.c) void {
                 const ctx = @as(*CallbackContext, @ptrCast(@alignCast(data)));
                 ctx.callback(ctx.user_data);
             }
@@ -112,7 +112,7 @@ pub const TrayMenu = struct {
         defer std.heap.c_allocator.free(label_z);
 
         const Wrapper = struct {
-            fn call(menu_id: c_int, data: ?*anyopaque) callconv(.C) void {
+            fn call(menu_id: c_int, data: ?*anyopaque) callconv(.c) void {
                 const ctx = @as(*MenuCallbackContext, @ptrCast(@alignCast(data)));
                 ctx.callback(menu_id, ctx.user_data);
             }
@@ -139,7 +139,7 @@ pub const TrayMenu = struct {
         defer std.heap.c_allocator.free(label_z);
 
         const Wrapper = struct {
-            fn call(menu_id: c_int, data: ?*anyopaque) callconv(.C) void {
+            fn call(menu_id: c_int, data: ?*anyopaque) callconv(.c) void {
                 const ctx = @as(*MenuCallbackContext, @ptrCast(@alignCast(data)));
                 ctx.callback(menu_id, ctx.user_data);
             }
