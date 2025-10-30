@@ -27,7 +27,7 @@ pub fn main() !void {
     // Main event loop
     while (true) {
         icon.processEvents();
-        std.time.sleep(10 * std.time.ns_per_ms);
+        std.Thread.sleep(10 * std.time.ns_per_ms);
     }
 }
 
