@@ -6,17 +6,17 @@ pub const MenuItemType = enum(c_int) {
     radio = c.STRAY_MENU_ITEM_RADIO,
 };
 
-/// Click callback function signature
+/// Click callback function.
 pub const ClickCallback = *const fn (user_data: ?*anyopaque) void;
 
-/// Menu callback function signature
+/// Menu callback function.
 pub const MenuCallback = *const fn (menu_id: i32, user_data: ?*anyopaque) void;
 
-/// System tray icon
+/// System tray icon.
 pub const TrayIcon = struct {
     handle: *c.TrayIcon,
 
-    /// Create a new tray icon
+    /// Creates a new tray icon.
     pub fn create(app_name: []const u8, icon_name: ?[]const u8, title: ?[]const u8) !TrayIcon {
         const app_name_z = try std.heap.c_allocator.dupeZ(u8, app_name);
         defer std.heap.c_allocator.free(app_name_z);
@@ -44,14 +44,14 @@ pub const TrayIcon = struct {
         return TrayIcon{ .handle = handle };
     }
 
-    /// Register the tray icon with the system
+    /// Registers the tray icon with the system.
     pub fn register(self: TrayIcon) !void {
         if (c.stray_register(self.handle) == 0) {
             return error.RegisterFailed;
         }
     }
 
-    /// Set the click callback
+    /// Sets the click callback.
     pub fn setClickCallback(self: TrayIcon, callback: ClickCallback, user_data: ?*anyopaque) void {
         const Wrapper = struct {
             fn call(data: ?*anyopaque) callconv(.C) void {
@@ -66,47 +66,47 @@ pub const TrayIcon = struct {
         c.stray_set_click_callback(self.handle, Wrapper.call, ctx);
     }
 
-    /// Process pending events (non-blocking)
+    /// Processes pending events (non-blocking).
     pub fn processEvents(self: TrayIcon) void {
         c.stray_process_events(self.handle);
     }
 
-    /// Set the icon name
+    /// Sets the icon name.
     pub fn setIcon(self: TrayIcon, icon_name: []const u8) !void {
         const icon_name_z = try std.heap.c_allocator.dupeZ(u8, icon_name);
         defer std.heap.c_allocator.free(icon_name_z);
         c.stray_set_icon(self.handle, icon_name_z.ptr);
     }
 
-    /// Set the title
+    /// Sets the title.
     pub fn setTitle(self: TrayIcon, title: []const u8) !void {
         const title_z = try std.heap.c_allocator.dupeZ(u8, title);
         defer std.heap.c_allocator.free(title_z);
         c.stray_set_title(self.handle, title_z.ptr);
     }
 
-    /// Set the menu for this tray icon
+    /// Sets the menu for this tray icon.
     pub fn setMenu(self: TrayIcon, menu: TrayMenu) void {
         c.stray_set_menu(self.handle, menu.handle);
     }
 
-    /// Destroy the tray icon
+    /// Destroys the tray icon.
     pub fn destroy(self: TrayIcon) void {
         c.stray_destroy(self.handle);
     }
 };
 
-/// Context menu for the tray icon
+/// Context menu for the tray icon.
 pub const TrayMenu = struct {
     handle: *c.TrayMenu,
 
-    /// Create a new menu
+    /// Creates a new menu.
     pub fn create() !TrayMenu {
         const handle = c.stray_menu_create() orelse return error.CreateFailed;
         return TrayMenu{ .handle = handle };
     }
 
-    /// Add a regular menu item
+    /// Adds a regular menu item.
     pub fn addItem(self: TrayMenu, label: []const u8, callback: MenuCallback, user_data: ?*anyopaque) !i32 {
         const label_z = try std.heap.c_allocator.dupeZ(u8, label);
         defer std.heap.c_allocator.free(label_z);
@@ -126,14 +126,14 @@ pub const TrayMenu = struct {
         return id;
     }
 
-    /// Add a separator
+    /// Adds a separator.
     pub fn addSeparator(self: TrayMenu) !i32 {
         const id = c.stray_menu_add_separator(self.handle);
         if (id < 0) return error.AddSeparatorFailed;
         return id;
     }
 
-    /// Add a checkable menu item
+    /// Adds a checkable menu item.
     pub fn addCheckItem(self: TrayMenu, label: []const u8, callback: MenuCallback, user_data: ?*anyopaque) !i32 {
         const label_z = try std.heap.c_allocator.dupeZ(u8, label);
         defer std.heap.c_allocator.free(label_z);
@@ -153,24 +153,24 @@ pub const TrayMenu = struct {
         return id;
     }
 
-    /// Set whether a menu item is checked
+    /// Sets whether a menu item is checked.
     pub fn setItemChecked(self: TrayMenu, item_id: i32, checked: bool) void {
         c.stray_menu_set_item_checked(self.handle, item_id, if (checked) 1 else 0);
     }
 
-    /// Set whether a menu item is enabled
+    /// Sets whether a menu item is enabled.
     pub fn setItemEnabled(self: TrayMenu, item_id: i32, enabled: bool) void {
         c.stray_menu_set_item_enabled(self.handle, item_id, if (enabled) 1 else 0);
     }
 
-    /// Set a menu item's label
+    /// Sets a menu item's label.
     pub fn setItemLabel(self: TrayMenu, item_id: i32, label: []const u8) !void {
         const label_z = try std.heap.c_allocator.dupeZ(u8, label);
         defer std.heap.c_allocator.free(label_z);
         c.stray_menu_set_item_label(self.handle, item_id, label_z.ptr);
     }
 
-    /// Destroy the menu
+    /// Destroys the menu.
     pub fn destroy(self: TrayMenu) void {
         c.stray_menu_destroy(self.handle);
     }
