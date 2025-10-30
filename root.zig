@@ -15,25 +15,29 @@ pub const MenuCallback = *const fn (menu_id: i32, user_data: ?*anyopaque) void;
 /// System tray icon.
 pub const TrayIcon = struct {
     handle: *c.TrayIcon,
+    allocator: std.mem.Allocator,
 
     /// Creates a new tray icon.
-    pub fn create(app_name: []const u8, icon_name: ?[]const u8, title: ?[]const u8) !TrayIcon {
-        const app_name_z = try std.heap.c_allocator.dupeZ(u8, app_name);
-        defer std.heap.c_allocator.free(app_name_z);
+    pub fn create(
+        allocator: std.mem.Allocator,
+        app_name: []const u8,
+        icon_name: ?[]const u8,
+        title: ?[]const u8,
+    ) !TrayIcon {
+        const app_name_z = try allocator.dupeZ(u8, app_name);
+        defer allocator.free(app_name_z);
 
         const icon_name_z = if (icon_name) |name|
-            try std.heap.c_allocator.dupeZ(u8, name)
+            try allocator.dupeZ(u8, name)
         else
             null;
-
-        defer if (icon_name_z) |name| std.heap.c_allocator.free(name);
+        defer if (icon_name_z) |name| allocator.free(name);
 
         const title_z = if (title) |t|
-            try std.heap.c_allocator.dupeZ(u8, t)
+            try allocator.dupeZ(u8, t)
         else
             null;
-
-        defer if (title_z) |t| std.heap.c_allocator.free(t);
+        defer if (title_z) |t| allocator.free(t);
 
         const handle = c.stray_create(
             app_name_z.ptr,
@@ -41,7 +45,10 @@ pub const TrayIcon = struct {
             if (title_z) |t| t.ptr else null,
         ) orelse return error.CreateFailed;
 
-        return TrayIcon{ .handle = handle };
+        return TrayIcon{
+            .handle = handle,
+            .allocator = allocator,
+        };
     }
 
     /// Registers the tray icon with the system.
@@ -52,7 +59,7 @@ pub const TrayIcon = struct {
     }
 
     /// Sets the click callback.
-    pub fn setClickCallback(self: TrayIcon, callback: ClickCallback, user_data: ?*anyopaque) void {
+    pub fn setClickCallback(self: *TrayIcon, callback: ClickCallback, user_data: ?*anyopaque) void {
         const Wrapper = struct {
             fn call(data: ?*anyopaque) callconv(.c) void {
                 const ctx = @as(*CallbackContext, @ptrCast(@alignCast(data)));
@@ -60,7 +67,8 @@ pub const TrayIcon = struct {
             }
         };
 
-        const ctx = std.heap.c_allocator.create(CallbackContext) catch return;
+        // Use aligned allocation for the callback context
+        const ctx = self.allocator.create(CallbackContext) catch return;
         ctx.* = .{ .callback = callback, .user_data = user_data };
 
         c.stray_set_click_callback(self.handle, Wrapper.call, ctx);
@@ -72,26 +80,26 @@ pub const TrayIcon = struct {
     }
 
     /// Sets the icon name.
-    pub fn setIcon(self: TrayIcon, icon_name: []const u8) !void {
-        const icon_name_z = try std.heap.c_allocator.dupeZ(u8, icon_name);
-        defer std.heap.c_allocator.free(icon_name_z);
+    pub fn setIcon(self: *TrayIcon, icon_name: []const u8) !void {
+        const icon_name_z = try self.allocator.dupeZ(u8, icon_name);
+        defer self.allocator.free(icon_name_z);
         c.stray_set_icon(self.handle, icon_name_z.ptr);
     }
 
     /// Sets the title.
-    pub fn setTitle(self: TrayIcon, title: []const u8) !void {
-        const title_z = try std.heap.c_allocator.dupeZ(u8, title);
-        defer std.heap.c_allocator.free(title_z);
+    pub fn setTitle(self: *TrayIcon, title: []const u8) !void {
+        const title_z = try self.allocator.dupeZ(u8, title);
+        defer self.allocator.free(title_z);
         c.stray_set_title(self.handle, title_z.ptr);
     }
 
     /// Sets the menu for this tray icon.
-    pub fn setMenu(self: TrayIcon, menu: TrayMenu) void {
+    pub fn setMenu(self: *TrayIcon, menu: *TrayMenu) void {
         c.stray_set_menu(self.handle, menu.handle);
     }
 
     /// Destroys the tray icon.
-    pub fn destroy(self: TrayIcon) void {
+    pub fn destroy(self: *TrayIcon) void {
         c.stray_destroy(self.handle);
     }
 };
@@ -99,17 +107,21 @@ pub const TrayIcon = struct {
 /// Context menu for the tray icon.
 pub const TrayMenu = struct {
     handle: *c.TrayMenu,
+    allocator: std.mem.Allocator,
 
     /// Creates a new menu.
-    pub fn create() !TrayMenu {
+    pub fn create(allocator: std.mem.Allocator) !TrayMenu {
         const handle = c.stray_menu_create() orelse return error.CreateFailed;
-        return TrayMenu{ .handle = handle };
+        return TrayMenu{
+            .handle = handle,
+            .allocator = allocator,
+        };
     }
 
     /// Adds a regular menu item.
-    pub fn addItem(self: TrayMenu, label: []const u8, callback: MenuCallback, user_data: ?*anyopaque) !i32 {
-        const label_z = try std.heap.c_allocator.dupeZ(u8, label);
-        defer std.heap.c_allocator.free(label_z);
+    pub fn addItem(self: *TrayMenu, label: []const u8, callback: MenuCallback, user_data: ?*anyopaque) !i32 {
+        const label_z = try self.allocator.dupeZ(u8, label);
+        defer self.allocator.free(label_z);
 
         const Wrapper = struct {
             fn call(menu_id: c_int, data: ?*anyopaque) callconv(.c) void {
@@ -118,7 +130,8 @@ pub const TrayMenu = struct {
             }
         };
 
-        const ctx = try std.heap.c_allocator.create(MenuCallbackContext);
+        // Use aligned allocation for the callback context
+        const ctx = try self.allocator.create(MenuCallbackContext);
         ctx.* = .{ .callback = callback, .user_data = user_data };
 
         const id = c.stray_menu_add_item(self.handle, label_z.ptr, Wrapper.call, ctx);
@@ -127,16 +140,16 @@ pub const TrayMenu = struct {
     }
 
     /// Adds a separator.
-    pub fn addSeparator(self: TrayMenu) !i32 {
+    pub fn addSeparator(self: *TrayMenu) !i32 {
         const id = c.stray_menu_add_separator(self.handle);
         if (id < 0) return error.AddSeparatorFailed;
         return id;
     }
 
     /// Adds a checkable menu item.
-    pub fn addCheckItem(self: TrayMenu, label: []const u8, callback: MenuCallback, user_data: ?*anyopaque) !i32 {
-        const label_z = try std.heap.c_allocator.dupeZ(u8, label);
-        defer std.heap.c_allocator.free(label_z);
+    pub fn addCheckItem(self: *TrayMenu, label: []const u8, callback: MenuCallback, user_data: ?*anyopaque) !i32 {
+        const label_z = try self.allocator.dupeZ(u8, label);
+        defer self.allocator.free(label_z);
 
         const Wrapper = struct {
             fn call(menu_id: c_int, data: ?*anyopaque) callconv(.c) void {
@@ -145,7 +158,8 @@ pub const TrayMenu = struct {
             }
         };
 
-        const ctx = try std.heap.c_allocator.create(MenuCallbackContext);
+        // Use aligned allocation for the callback context
+        const ctx = try self.allocator.create(MenuCallbackContext);
         ctx.* = .{ .callback = callback, .user_data = user_data };
 
         const id = c.stray_menu_add_check_item(self.handle, label_z.ptr, Wrapper.call, ctx);
@@ -164,14 +178,14 @@ pub const TrayMenu = struct {
     }
 
     /// Sets a menu item's label.
-    pub fn setItemLabel(self: TrayMenu, item_id: i32, label: []const u8) !void {
-        const label_z = try std.heap.c_allocator.dupeZ(u8, label);
-        defer std.heap.c_allocator.free(label_z);
+    pub fn setItemLabel(self: *TrayMenu, item_id: i32, label: []const u8) !void {
+        const label_z = try self.allocator.dupeZ(u8, label);
+        defer self.allocator.free(label_z);
         c.stray_menu_set_item_label(self.handle, item_id, label_z.ptr);
     }
 
     /// Destroys the menu.
-    pub fn destroy(self: TrayMenu) void {
+    pub fn destroy(self: *TrayMenu) void {
         c.stray_menu_destroy(self.handle);
     }
 };

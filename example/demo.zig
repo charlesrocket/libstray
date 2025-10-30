@@ -1,10 +1,14 @@
 pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
     // Create tray icon
-    const icon = try TrayIcon.create("stray-demo", "starred", "STRAY demo");
+    var icon = try TrayIcon.create(allocator, "stray-demo", "starred", "STRAY demo");
     defer icon.destroy();
 
     // Create menu
-    const menu = try TrayMenu.create();
+    var menu = try TrayMenu.create(allocator);
     defer menu.destroy();
 
     // Add menu items
@@ -15,7 +19,7 @@ pub fn main() !void {
     _ = try menu.addItem("Quit", onQuit, null);
 
     // Set menu
-    icon.setMenu(menu);
+    icon.setMenu(&menu);
 
     // Set click callback
     icon.setClickCallback(onClick, null);
