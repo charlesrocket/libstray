@@ -7,6 +7,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("root.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
 
     const lib = b.addLibrary(.{
@@ -17,7 +18,7 @@ pub fn build(b: *std.Build) void {
 
     lib_mod.linkSystemLibrary("dbus-1", .{});
     lib_mod.addIncludePath(b.path("."));
-    lib.addCSourceFile(.{
+    lib_mod.addCSourceFile(.{
         .file = b.path("wrapper.c"),
     });
 
