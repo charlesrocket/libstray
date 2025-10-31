@@ -33,6 +33,36 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
 
+    const test_app_mod = b.createModule(.{
+        .root_source_file = b.path("test/app.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const test_app = b.addExecutable(.{
+        .name = "test-app",
+        .root_module = test_app_mod,
+    });
+
+    test_app.root_module.addImport("stray", lib_mod);
+
+    const test_options = b.addOptions();
+    test_options.addOptionPath("test_app_path", test_app.getEmittedBin());
+
+    const integration_tests_mod = b.createModule(.{
+        .root_source_file = b.path("test/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const integration_tests = b.addTest(.{
+        .root_module = integration_tests_mod,
+        .use_llvm = true, //temp
+    });
+
+    integration_tests.root_module.addOptions("build_options", test_options);
+    test_step.dependOn(&b.addRunArtifact(integration_tests).step);
+
     const demo_mod = b.createModule(.{
         .root_source_file = b.path("example/demo.zig"),
         .target = target,
