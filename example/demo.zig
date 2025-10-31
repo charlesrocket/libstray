@@ -3,32 +3,32 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    // Create tray icon
+    // create tray icon
     var icon = try TrayIcon.create(allocator, "stray-demo", "starred", "STRAY demo");
     defer icon.destroy();
 
-    // Create menu
+    // create menu
     var menu = try TrayMenu.create(allocator);
     defer menu.destroy();
 
-    // Add menu items
+    // add menu items
     _ = try menu.addItem("Open", onOpen, null);
     _ = try menu.addSeparator();
     _ = try menu.addCheckItem("Enable feature", onToggle, null);
     _ = try menu.addSeparator();
     _ = try menu.addItem("Quit", onQuit, null);
 
-    // Set menu
+    // set menu
     icon.setMenu(&menu);
 
-    // Set click callback
+    // set click callback
     try icon.setClickCallback(onClick, null);
 
-    // Register with system
+    // register with system
     try icon.register();
 
     std.debug.print("STRAY demo. Press Ctrl+C to exit.\n", .{});
-    // Main event loop
+    // main event loop
     while (true) {
         icon.processEvents();
         std.Thread.sleep(10 * std.time.ns_per_ms);
