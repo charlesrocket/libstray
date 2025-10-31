@@ -2,6 +2,7 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
+    var is_active = true;
 
     // create tray icon
     var icon = try TrayIcon.create(allocator, "stray-demo", "starred", "STRAY demo");
@@ -16,7 +17,7 @@ pub fn main() !void {
     _ = try menu.addSeparator();
     _ = try menu.addCheckItem("Enable feature", onToggle, null);
     _ = try menu.addSeparator();
-    _ = try menu.addItem("Quit", onQuit, null);
+    _ = try menu.addItem("Quit", onQuit, &is_active);
 
     // set menu
     icon.setMenu(&menu);
@@ -29,7 +30,7 @@ pub fn main() !void {
 
     std.debug.print("STRAY demo. Press Ctrl+C to exit.\n", .{});
     // main event loop
-    while (true) {
+    while (is_active) {
         icon.processEvents();
         std.Thread.sleep(10 * std.time.ns_per_ms);
     }
@@ -53,9 +54,13 @@ fn onToggle(menu_id: i32, user_data: ?*anyopaque) void {
 
 fn onQuit(menu_id: i32, user_data: ?*anyopaque) void {
     _ = menu_id;
-    _ = user_data;
+
+    if (user_data) |ptr| {
+        const bool_ptr = @as(*bool, @ptrCast(@alignCast(ptr)));
+        bool_ptr.* = false;
+    }
+
     std.debug.print("Quit clicked!\n", .{});
-    std.process.exit(0);
 }
 
 const std = @import("std");
