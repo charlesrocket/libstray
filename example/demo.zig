@@ -22,7 +22,7 @@ pub fn main() !void {
     icon.setMenu(&menu);
 
     // Set click callback
-    icon.setClickCallback(onClick, null);
+    try icon.setClickCallback(onClick, null);
 
     // Register with system
     try icon.register();

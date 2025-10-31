@@ -12,10 +12,21 @@ pub const ClickCallback = *const fn (user_data: ?*anyopaque) void;
 /// Menu callback function.
 pub const MenuCallback = *const fn (menu_id: i32, user_data: ?*anyopaque) void;
 
+const CallbackContext = struct {
+    callback: ClickCallback,
+    user_data: ?*anyopaque,
+};
+
+const MenuCallbackContext = struct {
+    callback: MenuCallback,
+    user_data: ?*anyopaque,
+};
+
 /// System tray icon.
 pub const TrayIcon = struct {
     handle: *c.TrayIcon,
     allocator: std.mem.Allocator,
+    click_context: ?*CallbackContext = null,
 
     /// Creates a new tray icon.
     pub fn create(
@@ -59,17 +70,21 @@ pub const TrayIcon = struct {
     }
 
     /// Sets the click callback.
-    pub fn setClickCallback(self: *TrayIcon, callback: ClickCallback, user_data: ?*anyopaque) void {
+    pub fn setClickCallback(self: *TrayIcon, callback: ClickCallback, user_data: ?*anyopaque) !void {
         const Wrapper = struct {
-            fn call(data: ?*anyopaque) callconv(.c) void {
+            fn call(data: ?*anyopaque) callconv(.C) void {
                 const ctx = @as(*CallbackContext, @ptrCast(@alignCast(data)));
                 ctx.callback(ctx.user_data);
             }
         };
 
-        // Use aligned allocation for the callback context
-        const ctx = self.allocator.create(CallbackContext) catch return;
+        if (self.click_context) |old_ctx| {
+            self.allocator.destroy(old_ctx);
+        }
+
+        const ctx = try self.allocator.create(CallbackContext);
         ctx.* = .{ .callback = callback, .user_data = user_data };
+        self.click_context = ctx;
 
         c.stray_set_click_callback(self.handle, Wrapper.call, ctx);
     }
@@ -95,19 +110,26 @@ pub const TrayIcon = struct {
 
     /// Sets the menu for this tray icon.
     pub fn setMenu(self: *TrayIcon, menu: *TrayMenu) void {
-        c.stray_set_menu(self.handle, menu.handle);
+        c.stray_set_menu(self.handle, menu.handle.?);
+        menu.handle = null; // Transfer ownership
     }
 
     /// Destroys the tray icon.
     pub fn destroy(self: *TrayIcon) void {
+        if (self.click_context) |ctx| {
+            self.allocator.destroy(ctx);
+            self.click_context = null;
+        }
+
         c.stray_destroy(self.handle);
     }
 };
 
 /// Context menu for the tray icon.
 pub const TrayMenu = struct {
-    handle: *c.TrayMenu,
+    handle: ?*c.TrayMenu,
     allocator: std.mem.Allocator,
+    contexts: std.ArrayList(*MenuCallbackContext),
 
     /// Creates a new menu.
     pub fn create(allocator: std.mem.Allocator) !TrayMenu {
@@ -115,6 +137,7 @@ pub const TrayMenu = struct {
         return TrayMenu{
             .handle = handle,
             .allocator = allocator,
+            .contexts = std.ArrayList(*MenuCallbackContext).init(allocator),
         };
     }
 
@@ -124,15 +147,17 @@ pub const TrayMenu = struct {
         defer self.allocator.free(label_z);
 
         const Wrapper = struct {
-            fn call(menu_id: c_int, data: ?*anyopaque) callconv(.c) void {
+            fn call(menu_id: c_int, data: ?*anyopaque) callconv(.C) void {
                 const ctx = @as(*MenuCallbackContext, @ptrCast(@alignCast(data)));
                 ctx.callback(menu_id, ctx.user_data);
             }
         };
 
-        // Use aligned allocation for the callback context
         const ctx = try self.allocator.create(MenuCallbackContext);
+        errdefer self.allocator.destroy(ctx);
+
         ctx.* = .{ .callback = callback, .user_data = user_data };
+        try self.contexts.append(ctx);
 
         const id = c.stray_menu_add_item(self.handle, label_z.ptr, Wrapper.call, ctx);
         if (id < 0) return error.AddItemFailed;
@@ -147,20 +172,27 @@ pub const TrayMenu = struct {
     }
 
     /// Adds a checkable menu item.
-    pub fn addCheckItem(self: *TrayMenu, label: []const u8, callback: MenuCallback, user_data: ?*anyopaque) !i32 {
+    pub fn addCheckItem(
+        self: *TrayMenu,
+        label: []const u8,
+        callback: MenuCallback,
+        user_data: ?*anyopaque,
+    ) !i32 {
         const label_z = try self.allocator.dupeZ(u8, label);
         defer self.allocator.free(label_z);
 
         const Wrapper = struct {
-            fn call(menu_id: c_int, data: ?*anyopaque) callconv(.c) void {
+            fn call(menu_id: c_int, data: ?*anyopaque) callconv(.C) void {
                 const ctx = @as(*MenuCallbackContext, @ptrCast(@alignCast(data)));
                 ctx.callback(menu_id, ctx.user_data);
             }
         };
 
-        // Use aligned allocation for the callback context
         const ctx = try self.allocator.create(MenuCallbackContext);
+        errdefer self.allocator.destroy(ctx);
+
         ctx.* = .{ .callback = callback, .user_data = user_data };
+        try self.contexts.append(ctx);
 
         const id = c.stray_menu_add_check_item(self.handle, label_z.ptr, Wrapper.call, ctx);
         if (id < 0) return error.AddCheckItemFailed;
@@ -186,18 +218,17 @@ pub const TrayMenu = struct {
 
     /// Destroys the menu.
     pub fn destroy(self: *TrayMenu) void {
-        c.stray_menu_destroy(self.handle);
+        for (self.contexts.items) |ctx| {
+            self.allocator.destroy(ctx);
+        }
+
+        self.contexts.deinit();
+
+        if (self.handle) |h| {
+            c.stray_menu_destroy(h);
+            self.handle = null;
+        }
     }
-};
-
-const CallbackContext = struct {
-    callback: ClickCallback,
-    user_data: ?*anyopaque,
-};
-
-const MenuCallbackContext = struct {
-    callback: MenuCallback,
-    user_data: ?*anyopaque,
 };
 
 const std = @import("std");
