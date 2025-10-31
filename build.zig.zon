@@ -2,7 +2,7 @@
     .name = .libstray,
     .version = "0.1.1",
     .fingerprint = 0xe1114f6eff5c7028,
-    .minimum_zig_version = "0.15.1",
+    .minimum_zig_version = "0.15.2",
     .dependencies = .{},
     .paths = .{
         "build.zig",
