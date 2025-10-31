@@ -72,7 +72,7 @@ pub const TrayIcon = struct {
     /// Sets the click callback.
     pub fn setClickCallback(self: *TrayIcon, callback: ClickCallback, user_data: ?*anyopaque) !void {
         const Wrapper = struct {
-            fn call(data: ?*anyopaque) callconv(.C) void {
+            fn call(data: ?*anyopaque) callconv(.c) void {
                 const ctx = @as(*CallbackContext, @ptrCast(@alignCast(data)));
                 ctx.callback(ctx.user_data);
             }
@@ -129,7 +129,7 @@ pub const TrayIcon = struct {
 pub const TrayMenu = struct {
     handle: ?*c.TrayMenu,
     allocator: std.mem.Allocator,
-    contexts: std.ArrayList(*MenuCallbackContext),
+    contexts: std.array_list.Managed(*MenuCallbackContext),
 
     /// Creates a new menu.
     pub fn create(allocator: std.mem.Allocator) !TrayMenu {
@@ -137,7 +137,7 @@ pub const TrayMenu = struct {
         return TrayMenu{
             .handle = handle,
             .allocator = allocator,
-            .contexts = std.ArrayList(*MenuCallbackContext).init(allocator),
+            .contexts = std.array_list.Managed(*MenuCallbackContext).init(allocator),
         };
     }
 
@@ -147,7 +147,7 @@ pub const TrayMenu = struct {
         defer self.allocator.free(label_z);
 
         const Wrapper = struct {
-            fn call(menu_id: c_int, data: ?*anyopaque) callconv(.C) void {
+            fn call(menu_id: c_int, data: ?*anyopaque) callconv(.c) void {
                 const ctx = @as(*MenuCallbackContext, @ptrCast(@alignCast(data)));
                 ctx.callback(menu_id, ctx.user_data);
             }
@@ -182,7 +182,7 @@ pub const TrayMenu = struct {
         defer self.allocator.free(label_z);
 
         const Wrapper = struct {
-            fn call(menu_id: c_int, data: ?*anyopaque) callconv(.C) void {
+            fn call(menu_id: c_int, data: ?*anyopaque) callconv(.c) void {
                 const ctx = @as(*MenuCallbackContext, @ptrCast(@alignCast(data)));
                 ctx.callback(menu_id, ctx.user_data);
             }
