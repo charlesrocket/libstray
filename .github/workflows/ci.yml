@@ -12,8 +12,29 @@ env:
   ZIG_VERSION: 0.15.2
 
 jobs:
+  test-linux:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+
+      - name: Install dependencies
+        run: sudo apt install -y libdbus-1-dev
+
+      - name: Run tests
+        run: |
+          zig build test --verbose --summary all
+
   demo-linux:
-    name: Build linux demo
+    name: Demo
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -59,7 +80,7 @@ jobs:
 
   release:
     name: Release
-    needs: [demo-linux]
+    needs: [test-linux, demo-linux]
     permissions:
       contents: write
       id-token: write

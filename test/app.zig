@@ -25,7 +25,8 @@ pub fn main() !void {
 
     try icon.setClickCallback(onClick, null);
 
-    try icon.register();
+    // TODO set up D-Bus CI session
+    icon.register() catch {};
 
     var count: usize = 0;
     while (is_active) {

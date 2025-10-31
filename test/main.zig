@@ -24,6 +24,8 @@ fn runner(args: [1][]const u8) !Proc {
     const out = try stdout.toOwnedSlice(allocator);
     const err = try stderr.toOwnedSlice(allocator);
 
+    if (err.len > 0) std.debug.print("{s}\n", .{err});
+
     return Proc{ .term = term, .out = out, .err = err };
 }
 
