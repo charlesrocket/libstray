@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1] - 2025-11-02
+
+### Bug Fixes
+
+- Drop `c_allocator`
+- Resolve leaking items
+- Fix array list
+- Update `onQuit`
+
+### Documentation
+
+- Update description
+- Adjust description
+- Reformat comments
+
+### Miscellaneous tasks
+
+- Add CI badge
+
+### Operations
+
+- Add test job
+
+### Testing
+
+- Add basic app
+
+### Build
+
+- Bump MSZV to 0.15.2
+
 ## [0.1.0] - 2025-10-30
 
 ### Bug Fixes
