@@ -798,9 +798,7 @@ int stray_register(TrayIcon *icon) {
     emit_properties_changed(icon, "All");
     process_events_with_timeout(icon->conn, 100);
 
-    if (!register_with_watcher(icon->conn, icon->service_name)) {
-        return 0;
-    }
+    if (!register_with_watcher(icon->conn, icon->service_name)) { return 0; }
 
     process_events_with_timeout(icon->conn, 100);
     return 1;
