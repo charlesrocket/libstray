@@ -666,7 +666,10 @@ register_with_watcher(DBusConnection *conn, const char *service_name) {
     dbus_message_unref(msg);
 
     if (dbus_error_is_set(&err)) {
-        fprintf(stderr, "Failed to register with watcher: %s\n", err.message);
+        fprintf(
+            stderr, "Failed to register with StatusNotifierWatcher: %s\n",
+            err.message);
+
         dbus_error_free(&err);
         return 0;
     }
