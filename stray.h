@@ -799,7 +799,6 @@ int stray_register(TrayIcon *icon) {
     process_events_with_timeout(icon->conn, 100);
 
     if (!register_with_watcher(icon->conn, icon->service_name)) {
-        fprintf(stderr, "Failed to register with watcher\n");
         return 0;
     }
 
