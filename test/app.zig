@@ -13,14 +13,14 @@ pub fn main() !void {
     defer icon.destroy();
 
     var menu = try TrayMenu.create(allocator);
-    defer menu.destroy();
 
     _ = try menu.addItem("Open", onOpen, null);
     _ = try menu.addSeparator();
-    _ = try menu.addCheckItem("Test feature", onToggle, null);
+    const disabled_item = try menu.addCheckItem("Test feature", onToggle, null);
     _ = try menu.addSeparator();
     _ = try menu.addItem("Quit", onQuit, &is_active);
 
+    icon.setMenuItemEnabled(disabled_item, false);
     icon.setMenu(&menu);
 
     try icon.setClickCallback(onClick, null);
