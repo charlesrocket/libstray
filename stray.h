@@ -838,7 +838,11 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
     icon->menu = NULL;
 
     if (!icon->service_name || !icon->icon_name || !icon->title) {
-        stray_destroy(icon);
+        safe_free(&icon->service_name);
+        safe_free(&icon->icon_name);
+        safe_free(&icon->title);
+        free(icon);
+
         return NULL;
     }
 
@@ -948,6 +952,7 @@ static int menu_ensure_capacity(TrayMenu *menu) {
         int new_capacity = menu->item_capacity * 2;
         TrayMenuItem **new_items =
             realloc(menu->items, new_capacity * sizeof(TrayMenuItem *));
+
         if (!new_items) return 0;
 
         for (i = menu->item_capacity; i < new_capacity; i++) {
@@ -1076,8 +1081,14 @@ void stray_menu_set_item_label(TrayMenu *menu, int item_id, const char *label) {
     item = find_menu_item(menu, item_id);
 
     if (item) {
+        char *new_label;
+
+        new_label = label ? strdup(label) : NULL;
+
+        if (label && !new_label) return;
+
         free(item->label);
-        item->label = label ? strdup(label) : NULL;
+        item->label = new_label;
 
         if (menu->icon) {
             int ids[1];
@@ -1091,9 +1102,11 @@ void stray_set_menu(TrayIcon *icon, TrayMenu *menu) {
     if (!icon) return;
 
     /* clear back-reference from old menu */
-    if (icon->menu) { icon->menu->icon = NULL; }
+    if (icon->menu && icon->menu != menu) {
+        icon->menu->icon = NULL;
+        stray_menu_destroy(icon->menu);
+    }
 
-    if (icon->menu) stray_menu_destroy(icon->menu);
     icon->menu = menu;
 
     if (menu) { menu->icon = icon; }
@@ -1103,6 +1116,15 @@ void stray_set_menu(TrayIcon *icon, TrayMenu *menu) {
 
 void stray_menu_destroy(TrayMenu *menu) {
     if (!menu) return;
+
+    for (int i = 0; i < menu->item_count; i++) {
+        if (menu->items[i]) {
+            free(menu->items[i]->label);
+            free(menu->items[i]);
+        }
+    }
+
+    free(menu->items);
     free(menu);
 }
 
