@@ -1,6 +1,12 @@
 IndentWidth: 4
+IndentAccessModifiers: false
 IndentCaseLabels: true
+IndentCaseBlocks: true
+#IndentExportBlock: true
+IndentGotoLabels: true
+IncludeBlocks: Regroup
 ColumnLimit: 80
+MaxEmptyLinesToKeep: 1
 AlignConsecutiveMacros: AcrossEmptyLinesAndComments
 AlignArrayOfStructures: Left
 AlignAfterOpenBracket: AlwaysBreak
@@ -8,3 +14,5 @@ AllowShortBlocksOnASingleLine: Always
 AllowAllArgumentsOnNextLine: true
 AllowAllParametersOfDeclarationOnNextLine: true
 AllowShortIfStatementsOnASingleLine: WithoutElse
+EmptyLineBeforeAccessModifier: LogicalBlock
+ContinuationIndentWidth: 4
