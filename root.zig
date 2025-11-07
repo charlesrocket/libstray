@@ -27,6 +27,7 @@ pub const TrayIcon = struct {
     handle: *c.TrayIcon,
     allocator: std.mem.Allocator,
     click_context: ?*CallbackContext = null,
+    menu: ?*TrayMenu = null,
 
     /// Creates a new tray icon.
     pub fn create(
@@ -42,12 +43,14 @@ pub const TrayIcon = struct {
             try allocator.dupeZ(u8, name)
         else
             null;
+
         defer if (icon_name_z) |name| allocator.free(name);
 
         const title_z = if (title) |t|
             try allocator.dupeZ(u8, t)
         else
             null;
+
         defer if (title_z) |t| allocator.free(t);
 
         const handle = c.stray_create(
@@ -110,8 +113,29 @@ pub const TrayIcon = struct {
 
     /// Sets the menu for this tray icon.
     pub fn setMenu(self: *TrayIcon, menu: *TrayMenu) void {
-        c.stray_set_menu(self.handle, menu.handle.?);
-        menu.handle = null; // Transfer ownership
+        self.menu = menu;
+        c.stray_set_menu(self.handle, menu.handle);
+    }
+
+    /// Sets whether a menu item state.
+    pub fn setMenuItemEnabled(self: *TrayIcon, item_id: i32, enabled: bool) void {
+        if (self.menu) |menu| {
+            menu.setItemEnabled(item_id, enabled);
+        }
+    }
+
+    /// Sets whether a menu item is checked.
+    pub fn setMenuItemChecked(self: *TrayIcon, item_id: i32, checked: bool) void {
+        if (self.menu) |menu| {
+            menu.setItemChecked(item_id, checked);
+        }
+    }
+
+    /// Sets a menu item's label.
+    pub fn setMenuItemLabel(self: *TrayIcon, item_id: i32, label: []const u8) !void {
+        if (self.menu) |menu| {
+            try menu.setItemLabel(item_id, label);
+        }
     }
 
     /// Destroys the tray icon.
@@ -119,6 +143,12 @@ pub const TrayIcon = struct {
         if (self.click_context) |ctx| {
             self.allocator.destroy(ctx);
             self.click_context = null;
+        }
+
+        // destroy the menu if we own it
+        if (self.menu) |menu| {
+            menu.destroy();
+            self.menu = null;
         }
 
         c.stray_destroy(self.handle);
@@ -216,8 +246,7 @@ pub const TrayMenu = struct {
         c.stray_menu_set_item_label(self.handle, item_id, label_z.ptr);
     }
 
-    /// Destroys the menu.
-    pub fn destroy(self: *TrayMenu) void {
+    fn destroy(self: *TrayMenu) void {
         for (self.contexts.items) |ctx| {
             self.allocator.destroy(ctx);
         }
@@ -231,7 +260,8 @@ pub const TrayMenu = struct {
     }
 };
 
-const std = @import("std");
 const c = @cImport({
     @cInclude("stray.h");
 });
+
+const std = @import("std");

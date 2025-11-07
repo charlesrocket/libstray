@@ -8,6 +8,7 @@ extern "C" {
 #endif
 
 #include <dbus/dbus.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -61,11 +62,14 @@ int stray_menu_add_separator(TrayMenu *menu);
 int stray_menu_add_item(
     TrayMenu *menu, const char *label, TrayMenuCallback callback,
     void *user_data);
+
 int stray_menu_add_check_item(
     TrayMenu *menu, const char *label, TrayMenuCallback callback,
     void *user_data);
+
 void stray_menu_set_item_checked(
     TrayMenu *menu, int item_id, dbus_bool_t checked);
+
 void stray_menu_set_item_enabled(
     TrayMenu *menu, int item_id, dbus_bool_t enabled);
 
@@ -79,13 +83,14 @@ struct TrayMenuItem {
     dbus_bool_t checked;
     TrayMenuCallback callback;
     void *user_data;
-    TrayMenuItem *next;
 };
 
 struct TrayMenu {
-    TrayMenuItem *items;
+    TrayMenuItem **items;
     int item_count;
+    int item_capacity;
     int next_id;
+    TrayIcon *icon;
 };
 
 struct TrayIcon {
@@ -100,6 +105,7 @@ struct TrayIcon {
 
 /* helper functions */
 static char *safe_strdup(const char *str) { return str ? strdup(str) : NULL; }
+
 static void safe_free(char **str) {
     if (str && *str) {
         free(*str);
@@ -151,6 +157,20 @@ static void emit_signal(TrayIcon *icon, const char *signal_name) {
         dbus_connection_send(icon->conn, msg, NULL);
         dbus_message_unref(msg);
     }
+}
+
+static TrayMenuItem *find_menu_item(TrayMenu *menu, dbus_int32_t id) {
+    int i;
+
+    if (!menu) return NULL;
+
+    for (i = 0; i < menu->item_count; i++) {
+        if (menu->items[i] && menu->items[i]->id == id) {
+            return menu->items[i];
+        }
+    }
+
+    return NULL;
 }
 
 static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
@@ -211,15 +231,6 @@ static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
     dbus_message_unref(msg);
 }
 
-static void get_icon_properties(
-    TrayIcon *icon, const char **out_icon, const char **out_title,
-    const char **out_menu, dbus_bool_t *out_is_menu) {
-    *out_icon = icon->icon_name ? icon->icon_name : STRAY_DEFAULT_ICON;
-    *out_title = icon->title ? icon->title : STRAY_DEFAULT_TITLE;
-    *out_menu = icon->menu ? STRAY_MENU_OBJECT_PATH : "/NO_DBUSMENU";
-    *out_is_menu = (icon->menu != NULL);
-}
-
 static void
 add_menu_item_properties(DBusMessageIter *props, TrayMenuItem *item) {
     dbus_bool_t visible;
@@ -251,6 +262,60 @@ add_menu_item_properties(DBusMessageIter *props, TrayMenuItem *item) {
         add_dict_entry(
             props, "toggle-state", DBUS_TYPE_INT32, "i", &toggle_state);
     }
+}
+
+static void emit_menu_items_updated(TrayIcon *icon, int *item_ids, int count) {
+    DBusMessage *msg;
+    DBusMessageIter args, updated_array, removed_array;
+    int i;
+
+    if (!icon || !icon->menu) return;
+
+    msg = dbus_message_new_signal(
+        STRAY_MENU_OBJECT_PATH, STRAY_DBUSMENU_INTERFACE,
+        "ItemsPropertiesUpdated");
+
+    if (!msg) return;
+
+    dbus_message_iter_init_append(msg, &args);
+    dbus_message_iter_open_container(
+        &args, DBUS_TYPE_ARRAY, "(ia{sv})", &updated_array);
+
+    for (i = 0; i < count; i++) {
+        TrayMenuItem *item = find_menu_item(icon->menu, item_ids[i]);
+        if (item) {
+            DBusMessageIter item_struct, props_array;
+
+            dbus_message_iter_open_container(
+                &updated_array, DBUS_TYPE_STRUCT, NULL, &item_struct);
+            dbus_message_iter_append_basic(
+                &item_struct, DBUS_TYPE_INT32, &item_ids[i]);
+
+            dbus_message_iter_open_container(
+                &item_struct, DBUS_TYPE_ARRAY, "{sv}", &props_array);
+
+            add_menu_item_properties(&props_array, item);
+            dbus_message_iter_close_container(&item_struct, &props_array);
+            dbus_message_iter_close_container(&updated_array, &item_struct);
+        }
+    }
+
+    dbus_message_iter_close_container(&args, &updated_array);
+    dbus_message_iter_open_container(
+        &args, DBUS_TYPE_ARRAY, "i", &removed_array);
+
+    dbus_message_iter_close_container(&args, &removed_array);
+    dbus_connection_send(icon->conn, msg, NULL);
+    dbus_message_unref(msg);
+}
+
+static void get_icon_properties(
+    TrayIcon *icon, const char **out_icon, const char **out_title,
+    const char **out_menu, dbus_bool_t *out_is_menu) {
+    *out_icon = icon->icon_name ? icon->icon_name : STRAY_DEFAULT_ICON;
+    *out_title = icon->title ? icon->title : STRAY_DEFAULT_TITLE;
+    *out_menu = icon->menu ? STRAY_MENU_OBJECT_PATH : "/NO_DBUSMENU";
+    *out_is_menu = (icon->menu != NULL);
 }
 
 static void handle_property_get_all(
@@ -388,24 +453,16 @@ static void handle_property_get(
     dbus_message_unref(reply);
 }
 
-static TrayMenuItem *find_menu_item(TrayMenu *menu, dbus_int32_t id) {
-    TrayMenuItem *item;
-
-    for (item = menu->items; item; item = item->next) {
-        if (item->id == id) return item;
-    }
-
-    return NULL;
-}
-
 static DBusHandlerResult
 handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     DBusMessageIter args, root_struct, root_props, root_children;
     DBusMessage *reply;
-    TrayMenuItem *item;
     dbus_uint32_t revision;
     dbus_int32_t root_id;
     const char *prop_value;
+    int i;
+
+    if (!icon || !icon->menu) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
     reply = dbus_message_new_method_return(msg);
 
@@ -430,9 +487,11 @@ handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     dbus_message_iter_open_container(
         &root_struct, DBUS_TYPE_ARRAY, "v", &root_children);
 
-    for (item = icon->menu->items; item; item = item->next) {
+    for (i = 0; i < icon->menu->item_count; i++) {
         DBusMessageIter child_variant, child_struct, child_props,
             child_children;
+        TrayMenuItem *item = icon->menu->items[i];
+        if (!item) continue;
 
         dbus_message_iter_open_container(
             &root_children, DBUS_TYPE_VARIANT, "(ia{sv}av)", &child_variant);
@@ -448,6 +507,7 @@ handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
         dbus_message_iter_close_container(&child_struct, &child_props);
         dbus_message_iter_open_container(
             &child_struct, DBUS_TYPE_ARRAY, "v", &child_children);
+
         dbus_message_iter_close_container(&child_struct, &child_children);
         dbus_message_iter_close_container(&child_variant, &child_struct);
         dbus_message_iter_close_container(&root_children, &child_variant);
@@ -455,7 +515,6 @@ handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
 
     dbus_message_iter_close_container(&root_struct, &root_children);
     dbus_message_iter_close_container(&args, &root_struct);
-
     dbus_connection_send(conn, reply, NULL);
     dbus_message_unref(reply);
 
@@ -468,6 +527,8 @@ handle_menu_event(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     const char *type;
     DBusMessageIter iter;
     DBusMessage *reply;
+
+    if (!icon || !icon->menu) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
     if (!dbus_message_iter_init(msg, &iter))
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
@@ -498,6 +559,11 @@ static DBusHandlerResult handle_menu_get_group_properties(
 
     if (!reply) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
+    if (!icon || !icon->menu) {
+        dbus_message_unref(reply);
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+
     dbus_message_iter_init_append(reply, &args);
     dbus_message_iter_open_container(
         &args, DBUS_TYPE_ARRAY, "(ia{sv})", &props_array);
@@ -518,6 +584,7 @@ static DBusHandlerResult handle_menu_get_group_properties(
                 DBusMessageIter tuple, item_props;
                 dbus_message_iter_open_container(
                     &props_array, DBUS_TYPE_STRUCT, NULL, &tuple);
+
                 dbus_message_iter_append_basic(&tuple, DBUS_TYPE_INT32, &id);
                 dbus_message_iter_open_container(
                     &tuple, DBUS_TYPE_ARRAY, "{sv}", &item_props);
@@ -544,7 +611,7 @@ menu_message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
     const char *member;
     TrayIcon *icon = (TrayIcon *)data;
 
-    if (!icon || !icon->menu) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    if (!icon) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
     interface = dbus_message_get_interface(msg);
     member = dbus_message_get_member(msg);
@@ -579,11 +646,14 @@ menu_message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
             dbus_message_iter_init_append(reply, &args);
             dbus_message_iter_append_basic(
                 &args, DBUS_TYPE_BOOLEAN, &need_update);
+
             dbus_message_iter_open_container(
                 &args, DBUS_TYPE_ARRAY, "u", &empty_array);
+
             dbus_message_iter_close_container(&args, &empty_array);
             dbus_message_iter_open_container(
                 &args, DBUS_TYPE_ARRAY, "u", &empty_array);
+
             dbus_message_iter_close_container(&args, &empty_array);
             dbus_connection_send(conn, reply, NULL);
             dbus_message_unref(reply);
@@ -655,6 +725,7 @@ register_with_watcher(DBusConnection *conn, const char *service_name) {
     DBusMessage *msg = dbus_message_new_method_call(
         STRAY_WATCHER_SERVICE, STRAY_WATCHER_PATH, STRAY_WATCHER_SERVICE,
         "RegisterStatusNotifierItem");
+
     if (!msg) return 0;
 
     item_path = STRAY_OBJECT_PATH;
@@ -764,6 +835,7 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
     icon->service_name = strdup(service_name);
     icon->icon_name = safe_strdup(icon_name ? icon_name : STRAY_DEFAULT_ICON);
     icon->title = safe_strdup(title ? title : STRAY_DEFAULT_TITLE);
+    icon->menu = NULL;
 
     if (!icon->service_name || !icon->icon_name || !icon->title) {
         stray_destroy(icon);
@@ -853,40 +925,51 @@ void stray_set_title(TrayIcon *icon, const char *title) {
 
 TrayMenu *stray_menu_create(void) {
     TrayMenu *menu = calloc(1, sizeof(TrayMenu));
-    if (menu) menu->next_id = 1;
+
+    if (menu) {
+        int i;
+        menu->next_id = 1;
+        menu->item_count = 0;
+        menu->item_capacity = 8;
+        menu->items = calloc(menu->item_capacity, sizeof(TrayMenuItem *));
+        menu->icon = NULL;
+
+        for (i = 0; i < menu->item_capacity; i++) {
+            menu->items[i] = NULL;
+        }
+    }
+
     return menu;
 }
 
-void stray_menu_destroy(TrayMenu *menu) {
-    TrayMenuItem *item;
-    TrayMenuItem *next;
+static int menu_ensure_capacity(TrayMenu *menu) {
+    if (menu->item_count >= menu->item_capacity) {
+        int i;
+        int new_capacity = menu->item_capacity * 2;
+        TrayMenuItem **new_items =
+            realloc(menu->items, new_capacity * sizeof(TrayMenuItem *));
+        if (!new_items) return 0;
 
-    if (!menu) return;
+        for (i = menu->item_capacity; i < new_capacity; i++) {
+            new_items[i] = NULL;
+        }
 
-    item = menu->items;
-
-    while (item) {
-        next = item->next;
-        free(item->label);
-        free(item);
-        item = next;
+        menu->items = new_items;
+        menu->item_capacity = new_capacity;
     }
-
-    free(menu);
+    return 1;
 }
 
 static TrayMenuItem *create_menu_item(
     TrayMenu *menu, const char *label, TrayMenuItemType type,
     TrayMenuCallback callback, void *user_data) {
-    TrayMenuItem *item = calloc(1, sizeof(TrayMenuItem));
+    TrayMenuItem *item;
+
+    if (!menu_ensure_capacity(menu)) return NULL;
+
+    item = calloc(1, sizeof(TrayMenuItem));
+
     if (!item) return NULL;
-
-    item->label = label ? strdup(label) : NULL;
-
-    if (label && !item->label) {
-        free(item);
-        return NULL;
-    }
 
     item->id = menu->next_id++;
     item->type = type;
@@ -894,18 +977,20 @@ static TrayMenuItem *create_menu_item(
     item->checked = FALSE;
     item->callback = callback;
     item->user_data = user_data;
-    if (label) item->label = strdup(label);
 
-    if (!menu->items) {
-        menu->items = item;
+    if (label) {
+        item->label = strdup(label);
+        if (!item->label) {
+            free(item);
+            return NULL;
+        }
     } else {
-        TrayMenuItem *last = menu->items;
-        while (last->next)
-            last = last->next;
-        last->next = item;
+        item->label = NULL;
     }
 
+    menu->items[menu->item_count] = item;
     menu->item_count++;
+
     return item;
 }
 
@@ -953,7 +1038,15 @@ void stray_menu_set_item_checked(
 
     item = find_menu_item(menu, item_id);
 
-    if (item) item->checked = checked;
+    if (item) {
+        item->checked = checked;
+
+        if (menu->icon) {
+            int ids[1];
+            ids[0] = item_id;
+            emit_menu_items_updated(menu->icon, ids, 1);
+        }
+    }
 }
 
 void stray_menu_set_item_enabled(
@@ -964,7 +1057,15 @@ void stray_menu_set_item_enabled(
 
     item = find_menu_item(menu, item_id);
 
-    if (item) item->enabled = enabled;
+    if (item) {
+        item->enabled = enabled;
+
+        if (menu->icon) {
+            int ids[1];
+            ids[0] = item_id;
+            emit_menu_items_updated(menu->icon, ids, 1);
+        }
+    }
 }
 
 void stray_menu_set_item_label(TrayMenu *menu, int item_id, const char *label) {
@@ -977,34 +1078,49 @@ void stray_menu_set_item_label(TrayMenu *menu, int item_id, const char *label) {
     if (item) {
         free(item->label);
         item->label = label ? strdup(label) : NULL;
+
+        if (menu->icon) {
+            int ids[1];
+            ids[0] = item_id;
+            emit_menu_items_updated(menu->icon, ids, 1);
+        }
     }
 }
 
 void stray_set_menu(TrayIcon *icon, TrayMenu *menu) {
     if (!icon) return;
+
+    /* clear back-reference from old menu */
+    if (icon->menu) { icon->menu->icon = NULL; }
+
     if (icon->menu) stray_menu_destroy(icon->menu);
     icon->menu = menu;
+
+    if (menu) { menu->icon = icon; }
+
     emit_properties_changed(icon, "All");
+}
+
+void stray_menu_destroy(TrayMenu *menu) {
+    if (!menu) return;
+    free(menu);
 }
 
 void stray_destroy(TrayIcon *icon) {
     if (!icon) return;
 
-    /* unregister DBus objects first */
+    /* unregister from D-Bus first */
     if (icon->conn) {
         dbus_connection_unregister_object_path(icon->conn, STRAY_OBJECT_PATH);
         dbus_connection_unregister_object_path(
             icon->conn, STRAY_MENU_OBJECT_PATH);
+        dbus_connection_unref(icon->conn);
     }
-
-    if (icon->menu) stray_menu_destroy(icon->menu);
 
     safe_free(&icon->service_name);
     safe_free(&icon->icon_name);
     safe_free(&icon->title);
-
-    if (icon->conn) dbus_connection_unref(icon->conn);
-
+    free(icon->menu);
     free(icon);
 }
 

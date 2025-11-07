@@ -10,12 +10,10 @@ pub fn main() !void {
 
     // create menu
     var menu = try TrayMenu.create(allocator);
-    defer menu.destroy();
 
     // add menu items
     _ = try menu.addItem("Open", onOpen, null);
-    _ = try menu.addSeparator();
-    _ = try menu.addCheckItem("Enable feature", onToggle, null);
+    const disabled_item = try menu.addCheckItem("Disabled item", onToggle, null);
     _ = try menu.addSeparator();
     _ = try menu.addItem("Quit", onQuit, &is_active);
 
@@ -24,6 +22,9 @@ pub fn main() !void {
 
     // set click callback
     try icon.setClickCallback(onClick, null);
+
+    // disable menu item
+    icon.setMenuItemEnabled(disabled_item, false);
 
     // register with system
     try icon.register();
