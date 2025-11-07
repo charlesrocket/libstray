@@ -112,6 +112,7 @@ pub const TrayIcon = struct {
     }
 
     /// Sets the menu for this tray icon.
+    /// The icon takes ownership, so the menu will be destroyed with the icon.
     pub fn setMenu(self: *TrayIcon, menu: *TrayMenu) void {
         self.menu = menu;
         c.stray_set_menu(self.handle, menu.handle);
@@ -139,15 +140,19 @@ pub const TrayIcon = struct {
     }
 
     /// Destroys the tray icon.
+    /// This will also destroy the menu.
     pub fn destroy(self: *TrayIcon) void {
         if (self.click_context) |ctx| {
             self.allocator.destroy(ctx);
             self.click_context = null;
         }
 
-        // destroy the menu if we own it
+        // clean up the menu contexts
         if (self.menu) |menu| {
-            menu.destroy();
+            for (menu.contexts.items) |ctx| {
+                self.allocator.destroy(ctx);
+            }
+            menu.contexts.deinit();
             self.menu = null;
         }
 
@@ -244,19 +249,6 @@ pub const TrayMenu = struct {
         const label_z = try self.allocator.dupeZ(u8, label);
         defer self.allocator.free(label_z);
         c.stray_menu_set_item_label(self.handle, item_id, label_z.ptr);
-    }
-
-    fn destroy(self: *TrayMenu) void {
-        for (self.contexts.items) |ctx| {
-            self.allocator.destroy(ctx);
-        }
-
-        self.contexts.deinit();
-
-        if (self.handle) |h| {
-            c.stray_menu_destroy(h);
-            self.handle = null;
-        }
     }
 };
 

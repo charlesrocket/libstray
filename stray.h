@@ -55,7 +55,6 @@ int stray_register(TrayIcon *icon);
 
 /* Menu API */
 TrayMenu *stray_menu_create(void);
-void stray_menu_destroy(TrayMenu *menu);
 void stray_set_menu(TrayIcon *icon, TrayMenu *menu);
 void stray_menu_set_item_label(TrayMenu *menu, int item_id, const char *label);
 int stray_menu_add_separator(TrayMenu *menu);
@@ -1101,11 +1100,7 @@ void stray_menu_set_item_label(TrayMenu *menu, int item_id, const char *label) {
 void stray_set_menu(TrayIcon *icon, TrayMenu *menu) {
     if (!icon) return;
 
-    /* clear back-reference from old menu */
-    if (icon->menu && icon->menu != menu) {
-        icon->menu->icon = NULL;
-        stray_menu_destroy(icon->menu);
-    }
+    if (icon->menu && icon->menu != menu) { icon->menu->icon = NULL; }
 
     icon->menu = menu;
 
@@ -1114,7 +1109,7 @@ void stray_set_menu(TrayIcon *icon, TrayMenu *menu) {
     emit_properties_changed(icon, "All");
 }
 
-void stray_menu_destroy(TrayMenu *menu) {
+static void stray_menu_destroy(TrayMenu *menu) {
     if (!menu) return;
 
     for (int i = 0; i < menu->item_count; i++) {
@@ -1131,7 +1126,14 @@ void stray_menu_destroy(TrayMenu *menu) {
 void stray_destroy(TrayIcon *icon) {
     if (!icon) return;
 
-    /* unregister from D-Bus first */
+    /* destroy menu first */
+    if (icon->menu) {
+        icon->menu->icon = NULL;
+        stray_menu_destroy(icon->menu);
+        icon->menu = NULL;
+    }
+
+    /* unregister from D-Bus */
     if (icon->conn) {
         dbus_connection_unregister_object_path(icon->conn, STRAY_OBJECT_PATH);
         dbus_connection_unregister_object_path(
@@ -1142,7 +1144,6 @@ void stray_destroy(TrayIcon *icon) {
     safe_free(&icon->service_name);
     safe_free(&icon->icon_name);
     safe_free(&icon->title);
-    free(icon->menu);
     free(icon);
 }
 
