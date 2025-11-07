@@ -10,6 +10,7 @@ pub fn main() !void {
         "face-devilish",
         "STRAY test",
     );
+
     defer icon.destroy();
 
     var menu = try TrayMenu.create(allocator);
@@ -23,6 +24,7 @@ pub fn main() !void {
     icon.setMenuItemEnabled(disabled_item, false);
     icon.setMenu(&menu);
 
+    _ = try icon.setTitle("TEST");
     try icon.setClickCallback(onClick, null);
 
     // TODO set up D-Bus CI session
