@@ -229,6 +229,7 @@ static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
     const char *current_icon;
     const char *current_title;
     const char *menu_path;
+    const char *id_str;
     DBusMessageIter args, changed_props, invalidated_props;
     DBusMessage *msg;
     dbus_bool_t item_is_menu;
@@ -246,6 +247,8 @@ static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
 
     current_title = icon->title ? icon->title : STRAY_DEFAULT_TITLE;
     menu_path = icon->menu ? STRAY_MENU_OBJECT_PATH : "/NO_DBUSMENU";
+
+    id_str = icon->title ? icon->title : STRAY_DEFAULT_ID;
 
     item_is_menu = (icon->menu != NULL);
 
@@ -272,6 +275,9 @@ static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
         add_dict_entry(
             &changed_props, "ItemIsMenu", DBUS_TYPE_BOOLEAN, "b",
             &item_is_menu);
+
+    if (all || strcmp(property_name, "Id") == 0)
+        add_dict_entry(&changed_props, "Id", DBUS_TYPE_STRING, "s", &id_str);
 
     if (all || strcmp(property_name, "IconPixmap") == 0) {
         const char *key = "IconPixmap";
@@ -377,20 +383,20 @@ static void emit_menu_items_updated(TrayIcon *icon, int *item_ids, int count) {
 
 static void get_icon_properties(
     TrayIcon *icon, const char **out_icon, const char **out_title,
-    const char **out_menu, dbus_bool_t *out_is_menu) {
+    const char **out_menu, dbus_bool_t *out_is_menu, const char **out_id) {
     *out_icon = icon->icon_name ? icon->icon_name : STRAY_DEFAULT_ICON;
     *out_title = icon->title ? icon->title : STRAY_DEFAULT_TITLE;
     *out_menu = icon->menu ? STRAY_MENU_OBJECT_PATH : "/NO_DBUSMENU";
     *out_is_menu = (icon->menu != NULL);
+    *out_id = icon->title ? icon->title : STRAY_DEFAULT_ID;
 }
 
 static void handle_property_get_all(
     DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     DBusMessageIter args, array, dict_entry, variant;
     const char *prop_menu;
-    const char *current_icon, *current_title, *menu_path;
+    const char *current_icon, *current_title, *menu_path, *id_str;
     const char *category_str;
-    const char *id_str;
     const char *status_str;
     const char *empty_str;
     const char *prop_pixmap;
@@ -400,13 +406,13 @@ static void handle_property_get_all(
     if (!reply) return;
 
     get_icon_properties(
-        icon, &current_icon, &current_title, &menu_path, &item_is_menu);
+        icon, &current_icon, &current_title, &menu_path, &item_is_menu,
+        &id_str);
 
     dbus_message_iter_init_append(reply, &args);
     dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "{sv}", &array);
 
     category_str = "ApplicationStatus";
-    id_str = STRAY_DEFAULT_ID;
     status_str = "Active";
     empty_str = "";
 
@@ -456,9 +462,8 @@ static void handle_property_get(
     DBusConnection *conn, DBusMessage *msg, TrayIcon *icon, const char *prop) {
     DBusMessage *reply = dbus_message_new_method_return(msg);
     DBusMessageIter args;
-    const char *current_icon, *current_title, *menu_path;
+    const char *current_icon, *current_title, *menu_path, *id_str;
     const char *category_str;
-    const char *id_str;
     const char *status_str;
     const char *theme_path;
     dbus_bool_t item_is_menu;
@@ -466,12 +471,12 @@ static void handle_property_get(
     if (!reply) return;
 
     get_icon_properties(
-        icon, &current_icon, &current_title, &menu_path, &item_is_menu);
+        icon, &current_icon, &current_title, &menu_path, &item_is_menu,
+        &id_str);
 
     dbus_message_iter_init_append(reply, &args);
 
     category_str = "ApplicationStatus";
-    id_str = STRAY_DEFAULT_ID;
     status_str = "Active";
     theme_path = "";
 
@@ -787,7 +792,6 @@ message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
 
 static int
 register_with_watcher(DBusConnection *conn, const char *service_name) {
-    const char *item_path;
     DBusError err;
     DBusMessage *reply;
     DBusMessage *msg = dbus_message_new_method_call(
@@ -796,9 +800,8 @@ register_with_watcher(DBusConnection *conn, const char *service_name) {
 
     if (!msg) return 0;
 
-    item_path = STRAY_OBJECT_PATH;
     dbus_message_append_args(
-        msg, DBUS_TYPE_STRING, &item_path, DBUS_TYPE_INVALID);
+        msg, DBUS_TYPE_STRING, &service_name, DBUS_TYPE_INVALID);
 
     dbus_error_init(&err);
     reply = dbus_connection_send_with_reply_and_block(conn, msg, 5000, &err);
@@ -859,34 +862,39 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
     DBusError err;
     int ret;
 
-    if (!app_name) return NULL;
+    if (!app_name) {
+        fprintf(stderr, "Error: app_name cannot be NULL!\n");
+        return NULL;
+    }
 
     dbus_error_init(&err);
 
     conn = dbus_bus_get(DBUS_BUS_SESSION, &err);
 
     if (dbus_error_is_set(&err)) {
-        fprintf(stderr, "Failed to get DBus connection: %s\n", err.message);
+        fprintf(
+            stderr, "Error: failed to get DBus connection: %s\n", err.message);
         dbus_error_free(&err);
         return NULL;
     }
 
     snprintf(
-        service_name, sizeof(service_name), "org.kde.StatusNotifierItem-%d-%s",
-        getpid(), app_name);
+        service_name, sizeof(service_name), "org.kde.StatusNotifierItem.%s-%d",
+        app_name, getpid());
 
     ret = dbus_bus_request_name(
         conn, service_name, DBUS_NAME_FLAG_REPLACE_EXISTING, &err);
 
     if (dbus_error_is_set(&err)) {
-        fprintf(stderr, "Failed to request DBus name: %s\n", err.message);
+        fprintf(
+            stderr, "Error: failed to request DBus name: %s\n", err.message);
         dbus_error_free(&err);
         dbus_connection_unref(conn);
         return NULL;
     }
 
     if (ret != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
-        fprintf(stderr, "Failed to become primary owner of DBus name\n");
+        fprintf(stderr, "Error: failed to become primary owner of DBus name\n");
         dbus_connection_unref(conn);
         return NULL;
     }
@@ -902,7 +910,7 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
     icon->conn = conn;
     icon->service_name = strdup(service_name);
     icon->icon_name = safe_strdup(icon_name ? icon_name : STRAY_DEFAULT_ICON);
-    icon->title = safe_strdup(title ? title : STRAY_DEFAULT_TITLE);
+    icon->title = safe_strdup(title ? title : app_name);
     icon->menu = NULL;
     icon->icon_pixmaps = NULL;
     icon->icon_pixmap_count = 0;
@@ -912,7 +920,6 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
         safe_free(&icon->icon_name);
         safe_free(&icon->title);
         free(icon);
-
         return NULL;
     }
 
@@ -947,7 +954,10 @@ int stray_register(TrayIcon *icon) {
     emit_properties_changed(icon, "All");
     process_events_with_timeout(icon->conn, 100);
 
-    if (!register_with_watcher(icon->conn, icon->service_name)) { return 0; }
+    if (!register_with_watcher(icon->conn, icon->service_name)) {
+        fprintf(stderr, "Failed to register with StatusNotifierWatcher\n");
+        return 0;
+    }
 
     process_events_with_timeout(icon->conn, 100);
     return 1;
