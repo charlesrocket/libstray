@@ -4,7 +4,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
     var is_active = true;
 
-    var icon = try TrayIcon.create(
+    var icon = try Icon.create(
         allocator,
         "stray-test",
         "face-devilish",
@@ -13,7 +13,7 @@ pub fn main() !void {
 
     defer icon.destroy();
 
-    var menu = try TrayMenu.create(allocator);
+    var menu = try Menu.create(allocator);
 
     _ = try menu.addItem("Open", onOpen, null);
     _ = try menu.addSeparator();
@@ -68,5 +68,5 @@ fn onQuit(menu_id: i32, user_data: ?*anyopaque) void {
 
 const std = @import("std");
 const stray = @import("stray");
-const TrayIcon = stray.TrayIcon;
-const TrayMenu = stray.TrayMenu;
+const Icon = stray.Icon;
+const Menu = stray.Menu;

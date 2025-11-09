@@ -29,6 +29,11 @@ extern "C" {
 typedef struct TrayIcon TrayIcon;
 typedef struct TrayMenu TrayMenu;
 typedef struct TrayMenuItem TrayMenuItem;
+typedef struct {
+    int width;
+    int height;
+    uint32_t *data; /* ARGB32 format, each pixel is 32 bits */
+} StrayPixmap;
 
 typedef void (*TrayClickCallback)(void *user_data);
 typedef void (*TrayMenuCallback)(int menu_id, void *user_data);
@@ -48,10 +53,18 @@ void stray_set_click_callback(
     TrayIcon *icon, TrayClickCallback callback, void *user_data);
 
 void stray_process_events(TrayIcon *icon);
-void stray_set_icon(TrayIcon *icon, const char *icon_name);
 void stray_set_title(TrayIcon *icon, const char *title);
+void stray_set_icon(TrayIcon *icon, const char *icon_name);
+void stray_set_icon_pixmap(TrayIcon *icon, StrayPixmap *pixmaps, int count);
+void stray_clear_icon_pixmap(TrayIcon *icon);
 void stray_destroy(TrayIcon *icon);
 int stray_register(TrayIcon *icon);
+
+/* Pixmap API */
+StrayPixmap *stray_pixmap_create(int width, int height, uint32_t *data);
+void stray_set_icon_pixmap_data(
+    TrayIcon *icon, int width, int height, const uint32_t *data);
+void stray_pixmap_destroy(StrayPixmap *pixmap);
 
 /* Menu API */
 TrayMenu *stray_menu_create(void);
@@ -100,11 +113,13 @@ struct TrayIcon {
     TrayClickCallback click_callback;
     void *user_data;
     TrayMenu *menu;
+
+    StrayPixmap *icon_pixmaps;
+    int icon_pixmap_count;
 };
 
 /* helper functions */
 static char *safe_strdup(const char *str) { return str ? strdup(str) : NULL; }
-
 static void safe_free(char **str) {
     if (str && *str) {
         free(*str);
@@ -136,10 +151,47 @@ static void add_dict_entry(
     dbus_message_iter_close_container(array, &dict_entry);
 }
 
-static void add_empty_pixmap_array(DBusMessageIter *variant) {
-    DBusMessageIter pixmap_array;
+static void add_pixmap_array(DBusMessageIter *variant, TrayIcon *icon) {
+    DBusMessageIter pixmap_array, pixmap_struct, data_array;
+
+    /* open array of (iiay) */
     dbus_message_iter_open_container(
         variant, DBUS_TYPE_ARRAY, "(iiay)", &pixmap_array);
+
+    if (icon && icon->icon_pixmaps && icon->icon_pixmap_count > 0) {
+        int i;
+        for (i = 0; i < icon->icon_pixmap_count; i++) {
+            dbus_int32_t width;
+            dbus_int32_t height;
+            StrayPixmap *pixmap = &icon->icon_pixmaps[i];
+
+            dbus_message_iter_open_container(
+                &pixmap_array, DBUS_TYPE_STRUCT, NULL, &pixmap_struct);
+
+            width = pixmap->width;
+            dbus_message_iter_append_basic(
+                &pixmap_struct, DBUS_TYPE_INT32, &width);
+
+            height = pixmap->height;
+            dbus_message_iter_append_basic(
+                &pixmap_struct, DBUS_TYPE_INT32, &height);
+
+            dbus_message_iter_open_container(
+                &pixmap_struct, DBUS_TYPE_ARRAY, "y", &data_array);
+
+            if (pixmap->data) {
+                /* convert ARGB32 data to byte array */
+                size_t data_size =
+                    pixmap->width * pixmap->height * 4; /* 4 bytes per pixel */
+                const uint8_t *byte_data = (const uint8_t *)pixmap->data;
+                dbus_message_iter_append_fixed_array(
+                    &data_array, DBUS_TYPE_BYTE, &byte_data, data_size);
+            }
+
+            dbus_message_iter_close_container(&pixmap_struct, &data_array);
+            dbus_message_iter_close_container(&pixmap_array, &pixmap_struct);
+        }
+    }
 
     dbus_message_iter_close_container(variant, &pixmap_array);
 }
@@ -220,6 +272,21 @@ static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
         add_dict_entry(
             &changed_props, "ItemIsMenu", DBUS_TYPE_BOOLEAN, "b",
             &item_is_menu);
+
+    if (all || strcmp(property_name, "IconPixmap") == 0) {
+        const char *key = "IconPixmap";
+        DBusMessageIter dict_entry, variant;
+        dbus_message_iter_open_container(
+            &changed_props, DBUS_TYPE_DICT_ENTRY, NULL, &dict_entry);
+
+        dbus_message_iter_append_basic(&dict_entry, DBUS_TYPE_STRING, &key);
+        dbus_message_iter_open_container(
+            &dict_entry, DBUS_TYPE_VARIANT, "a(iiay)", &variant);
+
+        add_pixmap_array(&variant, icon);
+        dbus_message_iter_close_container(&dict_entry, &variant);
+        dbus_message_iter_close_container(&changed_props, &dict_entry);
+    }
 
     dbus_message_iter_close_container(&args, &changed_props);
     dbus_message_iter_open_container(
@@ -351,7 +418,7 @@ static void handle_property_get_all(
     add_dict_entry(&array, "IconName", DBUS_TYPE_STRING, "s", &current_icon);
     add_dict_entry(&array, "IconThemePath", DBUS_TYPE_STRING, "s", &empty_str);
 
-    /* add IconPixmap property (special case/empty array) */
+    /* add IconPixmap property */
     prop_pixmap = "IconPixmap";
     dbus_message_iter_open_container(
         &array, DBUS_TYPE_DICT_ENTRY, NULL, &dict_entry);
@@ -360,7 +427,7 @@ static void handle_property_get_all(
     dbus_message_iter_open_container(
         &dict_entry, DBUS_TYPE_VARIANT, "a(iiay)", &variant);
 
-    add_empty_pixmap_array(&variant);
+    add_pixmap_array(&variant, icon);
     dbus_message_iter_close_container(&dict_entry, &variant);
     dbus_message_iter_close_container(&array, &dict_entry);
 
@@ -403,7 +470,6 @@ static void handle_property_get(
 
     dbus_message_iter_init_append(reply, &args);
 
-    /* TODO */
     category_str = "ApplicationStatus";
     id_str = STRAY_DEFAULT_ID;
     status_str = "Active";
@@ -425,14 +491,17 @@ static void handle_property_get(
         DBusMessageIter variant;
         dbus_message_iter_open_container(
             &args, DBUS_TYPE_VARIANT, "a(iiay)", &variant);
-        add_empty_pixmap_array(&variant);
+
+        add_pixmap_array(&variant, icon); /* pass the icon to get pixmap data */
         dbus_message_iter_close_container(&args, &variant);
     } else if (strcmp(prop, "Menu") == 0) {
         DBusMessageIter variant;
         dbus_message_iter_open_container(
             &args, DBUS_TYPE_VARIANT, "o", &variant);
+
         dbus_message_iter_append_basic(
             &variant, DBUS_TYPE_OBJECT_PATH, &menu_path);
+
         dbus_message_iter_close_container(&args, &variant);
     } else if (strcmp(prop, "ItemIsMenu") == 0) {
         add_variant(&args, DBUS_TYPE_BOOLEAN, "b", &item_is_menu);
@@ -835,6 +904,8 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
     icon->icon_name = safe_strdup(icon_name ? icon_name : STRAY_DEFAULT_ICON);
     icon->title = safe_strdup(title ? title : STRAY_DEFAULT_TITLE);
     icon->menu = NULL;
+    icon->icon_pixmaps = NULL;
+    icon->icon_pixmap_count = 0;
 
     if (!icon->service_name || !icon->icon_name || !icon->title) {
         safe_free(&icon->service_name);
@@ -924,6 +995,89 @@ void stray_set_title(TrayIcon *icon, const char *title) {
     /* emit signals to notify about the change */
     emit_signal(icon, "NewTitle");
     emit_properties_changed(icon, "Title");
+}
+
+/* Create a pixmap from ARGB32 data */
+StrayPixmap *stray_pixmap_create(int width, int height, uint32_t *data) {
+    size_t data_size;
+
+    StrayPixmap *pixmap = calloc(1, sizeof(StrayPixmap));
+    if (!pixmap) return NULL;
+
+    pixmap->width = width;
+    pixmap->height = height;
+
+    data_size = width * height * sizeof(uint32_t);
+    pixmap->data = malloc(data_size);
+
+    if (!pixmap->data) {
+        free(pixmap);
+        return NULL;
+    }
+
+    memset(pixmap->data, 0, data_size);
+
+    if (data) { memcpy(pixmap->data, data, data_size); }
+
+    return pixmap;
+}
+
+/* Set icon pixmap */
+void stray_set_icon_pixmap_data(
+    TrayIcon *icon, int width, int height, const uint32_t *data) {
+    if (!icon) return;
+
+    if (data && width > 0 && height > 0) {
+        size_t data_size;
+
+        icon->icon_pixmaps = malloc(sizeof(StrayPixmap));
+        if (!icon->icon_pixmaps) return;
+
+        icon->icon_pixmaps[0].width = width;
+        icon->icon_pixmaps[0].height = height;
+
+        data_size = width * height * sizeof(uint32_t);
+        icon->icon_pixmaps[0].data = malloc(data_size);
+        if (icon->icon_pixmaps[0].data) {
+            memcpy(icon->icon_pixmaps[0].data, data, data_size);
+            icon->icon_pixmap_count = 1;
+        } else {
+            free(icon->icon_pixmaps);
+            icon->icon_pixmaps = NULL;
+            icon->icon_pixmap_count = 0;
+            return;
+        }
+    }
+
+    emit_signal(icon, "NewIcon");
+    emit_properties_changed(icon, "IconPixmap");
+}
+
+/* Destroy a pixmap */
+void stray_pixmap_destroy(StrayPixmap *pixmap) {
+    if (pixmap) {
+        free(pixmap->data);
+        free(pixmap);
+    }
+}
+
+/* Clear pixmap data */
+void stray_clear_icon_pixmap(TrayIcon *icon) {
+    if (!icon) return;
+
+    /* clear existing pixmap data */
+    if (icon->icon_pixmaps) {
+        int i;
+        for (i = 0; i < icon->icon_pixmap_count; i++) {
+            free(icon->icon_pixmaps[i].data);
+        }
+        free(icon->icon_pixmaps);
+        icon->icon_pixmaps = NULL;
+        icon->icon_pixmap_count = 0;
+    }
+
+    emit_signal(icon, "NewIcon");
+    emit_properties_changed(icon, "IconPixmap");
 }
 
 TrayMenu *stray_menu_create(void) {
@@ -1110,9 +1264,11 @@ void stray_set_menu(TrayIcon *icon, TrayMenu *menu) {
 }
 
 static void stray_menu_destroy(TrayMenu *menu) {
+    int i;
+
     if (!menu) return;
 
-    for (int i = 0; i < menu->item_count; i++) {
+    for (i = 0; i < menu->item_count; i++) {
         if (menu->items[i]) {
             free(menu->items[i]->label);
             free(menu->items[i]);
@@ -1126,7 +1282,10 @@ static void stray_menu_destroy(TrayMenu *menu) {
 void stray_destroy(TrayIcon *icon) {
     if (!icon) return;
 
-    /* destroy menu first */
+    /* clear the pixmap */
+    stray_clear_icon_pixmap(icon);
+
+    /* destroy the menu */
     if (icon->menu) {
         icon->menu->icon = NULL;
         stray_menu_destroy(icon->menu);
