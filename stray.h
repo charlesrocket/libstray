@@ -75,6 +75,10 @@ int stray_menu_add_check_item(
     TrayMenu *menu, const char *label, TrayMenuCallback callback,
     void *user_data);
 
+int stray_menu_add_radio_item(
+    TrayMenu *menu, const char *label, TrayMenuCallback callback,
+    void *user_data);
+
 void stray_menu_set_item_checked(
     TrayMenu *menu, int item_id, dbus_bool_t checked);
 
@@ -1239,6 +1243,19 @@ int stray_menu_add_check_item(
 
     item = create_menu_item(
         menu, label, STRAY_MENU_ITEM_CHECK, callback, user_data);
+
+    return item ? item->id : -1;
+}
+
+int stray_menu_add_radio_item(
+    TrayMenu *menu, const char *label, TrayMenuCallback callback,
+    void *user_data) {
+    TrayMenuItem *item;
+
+    if (!menu) return -1;
+
+    item = create_menu_item(
+        menu, label, STRAY_MENU_ITEM_RADIO, callback, user_data);
 
     return item ? item->id : -1;
 }

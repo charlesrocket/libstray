@@ -346,6 +346,43 @@ pub const Menu = struct {
         return id;
     }
 
+    /// Adds a radio menu item.
+    pub fn addRadioItem(
+        self: *Menu,
+        label: []const u8,
+        callback: MenuCallback,
+        user_data: ?*anyopaque,
+    ) !i32 {
+        const label_z = try self.allocator.dupeZ(u8, label);
+        defer self.allocator.free(label_z);
+
+        const Wrapper = struct {
+            fn call(menu_id: c_int, data: ?*anyopaque) callconv(.c) void {
+                const ctx = @as(
+                    *MenuCallbackContext,
+                    @ptrCast(@alignCast(data)),
+                );
+                ctx.callback(menu_id, ctx.user_data);
+            }
+        };
+
+        const ctx = try self.allocator.create(MenuCallbackContext);
+        errdefer self.allocator.destroy(ctx);
+
+        ctx.* = .{ .callback = callback, .user_data = user_data };
+        try self.contexts.append(ctx);
+
+        const id = c.stray_menu_add_radio_item(
+            self.handle,
+            label_z.ptr,
+            Wrapper.call,
+            ctx,
+        );
+
+        if (id < 0) return error.AddRadioItemFailed;
+        return id;
+    }
+
     /// Sets whether a menu item is checked.
     pub fn setItemChecked(self: Menu, item_id: i32, checked: bool) void {
         c.stray_menu_set_item_checked(

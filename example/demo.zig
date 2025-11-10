@@ -5,6 +5,16 @@ pub fn main() !void {
     var is_active = true;
     var is_checked = false;
 
+    // radio group state
+    const RadioGroup = struct {
+        selected_id: i32 = -1,
+        option1_id: i32 = -1,
+        option2_id: i32 = -1,
+        option3_id: i32 = -1,
+    };
+
+    var radio_group = RadioGroup{};
+
     // create tray icon
     var icon = try Icon.create(allocator, "stray-demo", "starred", "STRAY demo");
     defer icon.destroy();
@@ -20,6 +30,33 @@ pub fn main() !void {
         onCheck,
         &is_checked,
     );
+
+    _ = try menu.addSeparator();
+
+    // add radio menu items and store their actual IDs
+    radio_group.option1_id = try menu.addRadioItem(
+        "Radio Option 1",
+        onRadio,
+        &radio_group,
+    );
+
+    radio_group.option2_id = try menu.addRadioItem(
+        "Radio Option 2",
+        onRadio,
+        &radio_group,
+    );
+
+    radio_group.option3_id = try menu.addRadioItem(
+        "Radio Option 3",
+        onRadio,
+        &radio_group,
+    );
+
+    // set the initial radio state (Option 1 selected)
+    radio_group.selected_id = radio_group.option1_id;
+    icon.setMenuItemChecked(radio_group.option1_id, true);
+    icon.setMenuItemChecked(radio_group.option2_id, false);
+    icon.setMenuItemChecked(radio_group.option3_id, false);
 
     _ = try menu.addSeparator();
     _ = try menu.addItem("Quit", onQuit, &is_active);
@@ -39,7 +76,10 @@ pub fn main() !void {
     // set title
     try icon.setTitle("Demo title");
 
-    std.debug.print("STRAY demo. Press Ctrl+C to exit.\n", .{});
+    std.debug.print(
+        "\x1b[1mSTRAY demo\x1b[0m\nPress Ctrl+C to exit\n",
+        .{},
+    );
 
     // create and set custom pixmap icon
     const custom_icon = try createCustomIcon(allocator);
@@ -48,7 +88,7 @@ pub fn main() !void {
     // main event loop
     var count: usize = 0;
 
-    std.debug.print("Switch to a custom pixmap in 5 seconds...\n", .{});
+    std.debug.print("Switching to a custom pixmap in 5 seconds\n", .{});
 
     while (is_active) {
         count += 1;
@@ -62,7 +102,25 @@ pub fn main() !void {
             is_active = false;
         }
 
+        // toggle the checked item state
         icon.setMenuItemChecked(checked_item, !is_checked);
+
+        // update radio states based on current selection
+        icon.setMenuItemChecked(
+            radio_group.option1_id,
+            radio_group.selected_id == radio_group.option1_id,
+        );
+
+        icon.setMenuItemChecked(
+            radio_group.option2_id,
+            radio_group.selected_id == radio_group.option2_id,
+        );
+
+        icon.setMenuItemChecked(
+            radio_group.option3_id,
+            radio_group.selected_id == radio_group.option3_id,
+        );
+
         icon.processEvents();
         std.Thread.sleep(1 * std.time.ns_per_s);
     }
@@ -81,7 +139,45 @@ fn onCheck(menu_id: i32, user_data: ?*anyopaque) void {
         bool_ptr.* = !bool_ptr.*;
     }
 
-    std.debug.print("Check clicked!\n", .{});
+    std.debug.print(
+        "Check clicked! State: {}\n",
+        .{if (user_data) |ptr|
+            @as(*bool, @ptrCast(@alignCast(ptr))).*
+        else
+            false},
+    );
+}
+
+fn onRadio(menu_id: i32, user_data: ?*anyopaque) void {
+    if (user_data) |ptr| {
+        const radio_group_ptr = @as(
+            *struct {
+                selected_id: i32,
+                option1_id: i32,
+                option2_id: i32,
+                option3_id: i32,
+            },
+            @ptrCast(@alignCast(ptr)),
+        );
+
+        // update the selected radio button
+        radio_group_ptr.selected_id = menu_id;
+
+        // determine which option was selected for logging
+        const option_name = if (menu_id == radio_group_ptr.option1_id)
+            "Option 1"
+        else if (menu_id == radio_group_ptr.option2_id)
+            "Option 2"
+        else if (menu_id == radio_group_ptr.option3_id)
+            "Option 3"
+        else
+            "Unknown";
+
+        std.debug.print(
+            "Radio {s} selected! (ID: {d})\n",
+            .{ option_name, menu_id },
+        );
+    }
 }
 
 fn onOpen(menu_id: i32, user_data: ?*anyopaque) void {
@@ -125,5 +221,4 @@ fn createCustomIcon(allocator: std.mem.Allocator) ![]u32 {
 const std = @import("std");
 const stray = @import("stray");
 const Icon = stray.Icon;
-const Pixmap = stray.Pixmap;
 const Menu = stray.Menu;
