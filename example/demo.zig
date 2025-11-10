@@ -3,6 +3,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
     var is_active = true;
+    var is_checked = false;
 
     // create tray icon
     var icon = try Icon.create(allocator, "stray-demo", "starred", "STRAY demo");
@@ -13,7 +14,13 @@ pub fn main() !void {
 
     // add menu items
     _ = try menu.addItem("Open", onOpen, null);
-    const disabled_item = try menu.addCheckItem("Disabled item", onToggle, null);
+    const disabled_item = try menu.addItem("Disabled item", onToggle, null);
+    const checked_item = try menu.addCheckItem(
+        "Checked item",
+        onCheck,
+        &is_checked,
+    );
+
     _ = try menu.addSeparator();
     _ = try menu.addItem("Quit", onQuit, &is_active);
 
@@ -49,6 +56,7 @@ pub fn main() !void {
             is_active = false;
         }
 
+        icon.setMenuItemChecked(checked_item, !is_checked);
         icon.processEvents();
         std.Thread.sleep(1 * std.time.ns_per_s);
     }
@@ -57,6 +65,17 @@ pub fn main() !void {
 fn onClick(user_data: ?*anyopaque) void {
     _ = user_data;
     std.debug.print("Tray icon clicked!\n", .{});
+}
+
+fn onCheck(menu_id: i32, user_data: ?*anyopaque) void {
+    _ = menu_id;
+
+    if (user_data) |ptr| {
+        const bool_ptr = @as(*bool, @ptrCast(@alignCast(ptr)));
+        bool_ptr.* = !bool_ptr.*;
+    }
+
+    std.debug.print("Check clicked!\n", .{});
 }
 
 fn onOpen(menu_id: i32, user_data: ?*anyopaque) void {
