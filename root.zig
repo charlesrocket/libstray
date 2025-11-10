@@ -32,7 +32,7 @@ pub const Pixmap = extern struct {
         return @ptrCast(@alignCast(c_pixmap));
     }
 
-    pub fn setIconPixmapData(
+    pub fn setIconPixmap(
         self: *Icon,
         width: i32,
         height: i32,
@@ -44,11 +44,6 @@ pub const Pixmap = extern struct {
             height,
             @ptrCast(data.ptr),
         );
-    }
-
-    /// Destroys a pixmap created with create()
-    pub fn destroy(pixmap: *Pixmap) void {
-        c.stray_pixmap_destroy(@ptrCast(pixmap));
     }
 };
 
@@ -159,15 +154,15 @@ pub const Icon = struct {
 
     /// Sets the icon using pixmap data
     /// The icon takes ownership of the pixmaps
-    pub fn setIconPixmapData(
+    pub fn setIconPixmap(
         self: *Icon,
         width: i32,
         height: i32,
         data: []const u32,
     ) !void {
         // clear the named icon so the system uses the pixmap instead
-        c.stray_set_icon(self.handle, null);
-        c.stray_set_icon_pixmap_data(
+        c.stray_set_icon(self.handle, "");
+        c.stray_set_icon_pixmap(
             self.handle,
             width,
             height,
@@ -209,11 +204,6 @@ pub const Icon = struct {
         if (self.click_context) |ctx| {
             self.allocator.destroy(ctx);
             self.click_context = null;
-        }
-
-        // clean up owned pixmaps
-        for (self.owned_pixmaps.items) |pixmap| {
-            Pixmap.destroy(pixmap);
         }
 
         self.owned_pixmaps.deinit();

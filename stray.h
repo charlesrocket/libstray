@@ -55,16 +55,11 @@ void stray_set_click_callback(
 void stray_process_events(TrayIcon *icon);
 void stray_set_title(TrayIcon *icon, const char *title);
 void stray_set_icon(TrayIcon *icon, const char *icon_name);
-void stray_set_icon_pixmap(TrayIcon *icon, StrayPixmap *pixmaps, int count);
-void stray_clear_icon_pixmap(TrayIcon *icon);
 void stray_destroy(TrayIcon *icon);
 int stray_register(TrayIcon *icon);
 
-/* Pixmap API */
-StrayPixmap *stray_pixmap_create(int width, int height, uint32_t *data);
-void stray_set_icon_pixmap_data(
+void stray_set_icon_pixmap(
     TrayIcon *icon, int width, int height, const uint32_t *data);
-void stray_pixmap_destroy(StrayPixmap *pixmap);
 
 /* Menu API */
 TrayMenu *stray_menu_create(void);
@@ -1008,33 +1003,8 @@ void stray_set_title(TrayIcon *icon, const char *title) {
     emit_properties_changed(icon, "Title");
 }
 
-/* Create a pixmap from ARGB32 data */
-StrayPixmap *stray_pixmap_create(int width, int height, uint32_t *data) {
-    size_t data_size;
-
-    StrayPixmap *pixmap = calloc(1, sizeof(StrayPixmap));
-    if (!pixmap) return NULL;
-
-    pixmap->width = width;
-    pixmap->height = height;
-
-    data_size = width * height * sizeof(uint32_t);
-    pixmap->data = malloc(data_size);
-
-    if (!pixmap->data) {
-        free(pixmap);
-        return NULL;
-    }
-
-    memset(pixmap->data, 0, data_size);
-
-    if (data) { memcpy(pixmap->data, data, data_size); }
-
-    return pixmap;
-}
-
 /* Set icon pixmap */
-void stray_set_icon_pixmap_data(
+void stray_set_icon_pixmap(
     TrayIcon *icon, int width, int height, const uint32_t *data) {
     if (!icon) return;
 
@@ -1064,16 +1034,14 @@ void stray_set_icon_pixmap_data(
     emit_properties_changed(icon, "IconPixmap");
 }
 
-/* Destroy a pixmap */
-void stray_pixmap_destroy(StrayPixmap *pixmap) {
+static void stray_pixmap_destroy(StrayPixmap *pixmap) {
     if (pixmap) {
         free(pixmap->data);
         free(pixmap);
     }
 }
 
-/* Clear pixmap data */
-void stray_clear_icon_pixmap(TrayIcon *icon) {
+static void stray_clear_icon_pixmap(TrayIcon *icon) {
     if (!icon) return;
 
     /* clear existing pixmap data */
