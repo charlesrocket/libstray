@@ -32,6 +32,7 @@ pub fn main() !void {
     icon.setMenu(&menu);
 
     _ = try icon.setTitle("TEST");
+    try icon.setTooltip("Tooltip", "text");
     try icon.setClickCallback(onClick, null);
 
     // TODO set up D-Bus CI session

@@ -152,6 +152,28 @@ pub const Icon = struct {
         c.stray_set_title(self.handle, title_z.ptr);
     }
 
+    /// Sets the tooltip for the tray icon.
+    /// The tooltip has a title and descriptive text.
+    pub fn setTooltip(self: *Icon, title: ?[]const u8, text: ?[]const u8) !void {
+        const title_z = if (title) |t|
+            try self.allocator.dupeZ(u8, t)
+        else
+            null;
+        defer if (title_z) |t| self.allocator.free(t);
+
+        const text_z = if (text) |txt|
+            try self.allocator.dupeZ(u8, txt)
+        else
+            null;
+        defer if (text_z) |txt| self.allocator.free(txt);
+
+        c.stray_set_tooltip(
+            self.handle,
+            if (title_z) |t| t.ptr else null,
+            if (text_z) |txt| txt.ptr else null,
+        );
+    }
+
     /// Sets the icon using pixmap data
     /// The icon takes ownership of the pixmaps
     pub fn setIconPixmap(

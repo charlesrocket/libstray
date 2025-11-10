@@ -36,6 +36,9 @@ pub fn main() !void {
     // register with system
     try icon.register();
 
+    // set title
+    try icon.setTitle("Demo title");
+
     std.debug.print("STRAY demo. Press Ctrl+C to exit.\n", .{});
 
     // create and set custom pixmap icon
@@ -51,6 +54,9 @@ pub fn main() !void {
         count += 1;
         if (count == 5) {
             try icon.setIconPixmap(16, 16, custom_icon);
+        } else if (count == 10) {
+            std.debug.print("Setting the tooltip\n", .{});
+            try icon.setTooltip("Demo", "text");
         } else if (count == 30) {
             std.debug.print("Exiting\n", .{});
             is_active = false;

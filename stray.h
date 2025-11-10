@@ -55,6 +55,7 @@ void stray_set_click_callback(
 void stray_process_events(TrayIcon *icon);
 void stray_set_title(TrayIcon *icon, const char *title);
 void stray_set_icon(TrayIcon *icon, const char *icon_name);
+void stray_set_tooltip(TrayIcon *icon, const char *title, const char *text);
 void stray_destroy(TrayIcon *icon);
 int stray_register(TrayIcon *icon);
 
@@ -105,6 +106,9 @@ struct TrayIcon {
     char *service_name;
     char *icon_name;
     char *title;
+    char *tooltip_title;
+    char *tooltip_text;
+
     TrayClickCallback click_callback;
     void *user_data;
     TrayMenu *menu;
@@ -189,6 +193,25 @@ static void add_pixmap_array(DBusMessageIter *variant, TrayIcon *icon) {
     }
 
     dbus_message_iter_close_container(variant, &pixmap_array);
+}
+
+static void add_tooltip_struct(DBusMessageIter *variant, TrayIcon *icon) {
+    DBusMessageIter struct_iter, array_iter;
+    const char *icon_name = "";
+    const char *title = icon->tooltip_title ? icon->tooltip_title : "";
+    const char *text = icon->tooltip_text ? icon->tooltip_text : "";
+
+    dbus_message_iter_open_container(
+        variant, DBUS_TYPE_STRUCT, NULL, &struct_iter);
+
+    dbus_message_iter_append_basic(&struct_iter, DBUS_TYPE_STRING, &icon_name);
+    dbus_message_iter_open_container(
+        &struct_iter, DBUS_TYPE_ARRAY, "(iiay)", &array_iter);
+
+    dbus_message_iter_close_container(&struct_iter, &array_iter);
+    dbus_message_iter_append_basic(&struct_iter, DBUS_TYPE_STRING, &title);
+    dbus_message_iter_append_basic(&struct_iter, DBUS_TYPE_STRING, &text);
+    dbus_message_iter_close_container(variant, &struct_iter);
 }
 
 static void emit_signal(TrayIcon *icon, const char *signal_name) {
@@ -285,6 +308,21 @@ static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
             &dict_entry, DBUS_TYPE_VARIANT, "a(iiay)", &variant);
 
         add_pixmap_array(&variant, icon);
+        dbus_message_iter_close_container(&dict_entry, &variant);
+        dbus_message_iter_close_container(&changed_props, &dict_entry);
+    }
+
+    if (all || strcmp(property_name, "ToolTip") == 0) {
+        const char *key = "ToolTip";
+        DBusMessageIter dict_entry, variant;
+        dbus_message_iter_open_container(
+            &changed_props, DBUS_TYPE_DICT_ENTRY, NULL, &dict_entry);
+
+        dbus_message_iter_append_basic(&dict_entry, DBUS_TYPE_STRING, &key);
+        dbus_message_iter_open_container(
+            &dict_entry, DBUS_TYPE_VARIANT, "(sa(iiay)ss)", &variant);
+
+        add_tooltip_struct(&variant, icon);
         dbus_message_iter_close_container(&dict_entry, &variant);
         dbus_message_iter_close_container(&changed_props, &dict_entry);
     }
@@ -396,6 +434,7 @@ static void handle_property_get_all(
     const char *status_str;
     const char *empty_str;
     const char *prop_pixmap;
+    const char *prop_tooltip;
     dbus_bool_t item_is_menu;
 
     DBusMessage *reply = dbus_message_new_method_return(msg);
@@ -448,6 +487,20 @@ static void handle_property_get_all(
 
     /* add ItemIsMenu property */
     add_dict_entry(&array, "ItemIsMenu", DBUS_TYPE_BOOLEAN, "b", &item_is_menu);
+
+    /* add ToolTip property */
+    prop_tooltip = "ToolTip";
+    dbus_message_iter_open_container(
+        &array, DBUS_TYPE_DICT_ENTRY, NULL, &dict_entry);
+
+    dbus_message_iter_append_basic(
+        &dict_entry, DBUS_TYPE_STRING, &prop_tooltip);
+    dbus_message_iter_open_container(
+        &dict_entry, DBUS_TYPE_VARIANT, "(sa(iiay)ss)", &variant);
+
+    add_tooltip_struct(&variant, icon);
+    dbus_message_iter_close_container(&dict_entry, &variant);
+    dbus_message_iter_close_container(&array, &dict_entry);
 
     dbus_message_iter_close_container(&args, &array);
     dbus_connection_send(conn, reply, NULL);
@@ -506,6 +559,13 @@ static void handle_property_get(
         dbus_message_iter_close_container(&args, &variant);
     } else if (strcmp(prop, "ItemIsMenu") == 0) {
         add_variant(&args, DBUS_TYPE_BOOLEAN, "b", &item_is_menu);
+    } else if (strcmp(prop, "ToolTip") == 0) {
+        DBusMessageIter variant;
+        dbus_message_iter_open_container(
+            &args, DBUS_TYPE_VARIANT, "(sa(iiay)ss)", &variant);
+
+        add_tooltip_struct(&variant, icon);
+        dbus_message_iter_close_container(&args, &variant);
     } else {
         DBusMessage *error = dbus_message_new_error(
             msg, "org.freedesktop.DBus.Error.InvalidArgs",
@@ -907,6 +967,8 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
     icon->service_name = strdup(service_name);
     icon->icon_name = safe_strdup(icon_name ? icon_name : STRAY_DEFAULT_ICON);
     icon->title = safe_strdup(title ? title : app_name);
+    icon->tooltip_title = NULL;
+    icon->tooltip_text = NULL;
     icon->menu = NULL;
     icon->icon_pixmaps = NULL;
     icon->icon_pixmap_count = 0;
@@ -1001,6 +1063,20 @@ void stray_set_title(TrayIcon *icon, const char *title) {
     /* emit signals to notify about the change */
     emit_signal(icon, "NewTitle");
     emit_properties_changed(icon, "Title");
+}
+
+void stray_set_tooltip(TrayIcon *icon, const char *title, const char *text) {
+    if (!icon) return;
+
+    /* Free existing strings and duplicate new ones */
+    safe_free(&icon->tooltip_title);
+    safe_free(&icon->tooltip_text);
+
+    icon->tooltip_title = safe_strdup(title ? title : "");
+    icon->tooltip_text = safe_strdup(text ? text : "");
+
+    emit_signal(icon, "NewToolTip");
+    emit_properties_changed(icon, "ToolTip");
 }
 
 /* Set icon pixmap */
@@ -1270,6 +1346,10 @@ void stray_destroy(TrayIcon *icon) {
         stray_menu_destroy(icon->menu);
         icon->menu = NULL;
     }
+
+    /* clear tooltip strings */
+    safe_free(&icon->tooltip_title);
+    safe_free(&icon->tooltip_text);
 
     /* unregister from D-Bus */
     if (icon->conn) {
