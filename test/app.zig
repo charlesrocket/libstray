@@ -30,8 +30,12 @@ pub fn main() !void {
     // TODO set up D-Bus CI session
     icon.register() catch {};
 
+    const custom_icon = try createCustomIcon(allocator);
+    defer allocator.free(custom_icon);
+
     var count: usize = 0;
     while (is_active) {
+        if (count == 1) try icon.setIconPixmap(16, 16, custom_icon);
         if (count == 3) is_active = false;
         count += 1;
         icon.processEvents();
@@ -64,6 +68,25 @@ fn onQuit(menu_id: i32, user_data: ?*anyopaque) void {
     }
 
     std.debug.print("Quitting!\n", .{});
+}
+
+fn createCustomIcon(allocator: std.mem.Allocator) ![]u32 {
+    const width: i32 = 16;
+    const height: i32 = 16;
+    const pixel_count = @as(usize, @intCast(width * height));
+
+    var pixels = try allocator.alloc(u32, pixel_count);
+
+    for (0..pixel_count) |i| {
+        const b: u32 = 0x00; // blue
+        const g: u32 = 0x00; // green
+        const r: u32 = 0xFF; // red
+        const a: u32 = 0xFF; // alpha
+
+        pixels[i] = (b << 24) | (g << 16) | (r << 8) | a;
+    }
+
+    return pixels;
 }
 
 const std = @import("std");

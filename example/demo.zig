@@ -43,7 +43,7 @@ pub fn main() !void {
     while (is_active) {
         count += 1;
         if (count == 5) {
-            try icon.setIconPixmapData(16, 16, custom_icon);
+            try icon.setIconPixmap(16, 16, custom_icon);
         } else if (count == 30) {
             std.debug.print("Exiting\n", .{});
             is_active = false;
@@ -86,41 +86,12 @@ fn createCustomIcon(allocator: std.mem.Allocator) ![]u32 {
     const height: i32 = 16;
     const pixel_count = @as(usize, @intCast(width * height));
 
-    std.debug.print(
-        "Creating a pixmap: {}x{} ({} pixels)\n",
-        .{ width, height, pixel_count },
-    );
-
-    // allocate and initialize pixel data
     var pixels = try allocator.alloc(u32, pixel_count);
 
-    // create a simple blue circle on transparent background
-    const center_x = width / 2;
-    const center_y = height / 2;
-    const radius = @min(center_x, center_y) - 1;
+    const color = 0xA020F0;
 
-    std.debug.print(
-        "Center: {},{} Radius: {}\n",
-        .{ center_x, center_y, radius },
-    );
-
-    for (0..@as(usize, @intCast(height))) |y| {
-        for (0..@as(usize, @intCast(width))) |x| {
-            const idx = y * @as(usize, @intCast(width)) + x;
-            const dx = @as(i32, @intCast(x)) - center_x;
-            const dy = @as(i32, @intCast(y)) - center_y;
-
-            // use i64 for the squared calculations to prevent overflow
-            const dx_sq = @as(i64, dx) * @as(i64, dx);
-            const dy_sq = @as(i64, dy) * @as(i64, dy);
-            const radius_sq = @as(i64, radius) * @as(i64, radius);
-
-            if (dx_sq + dy_sq <= radius_sq) {
-                pixels[idx] = 0xFF0000FF; // ARGB: fully opaque blue
-            } else {
-                pixels[idx] = 0x00000000; // ARGB: fully transparent
-            }
-        }
+    for (0..pixel_count) |i| {
+        pixels[i] = color;
     }
 
     return pixels;
