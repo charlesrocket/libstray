@@ -374,10 +374,11 @@ static void emit_menu_items_updated(TrayIcon *icon, int *item_ids, int count) {
 
     dbus_message_iter_close_container(&args, &updated_array);
     dbus_message_iter_open_container(
-        &args, DBUS_TYPE_ARRAY, "i", &removed_array);
+        &args, DBUS_TYPE_ARRAY, "(ias)", &removed_array);
 
     dbus_message_iter_close_container(&args, &removed_array);
     dbus_connection_send(icon->conn, msg, NULL);
+    dbus_connection_flush(icon->conn);
     dbus_message_unref(msg);
 }
 
