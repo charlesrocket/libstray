@@ -79,14 +79,12 @@ pub const Icon = struct {
             try allocator.dupeZ(u8, name)
         else
             null;
-
         defer if (icon_name_z) |name| allocator.free(name);
 
         const title_z = if (title) |t|
             try allocator.dupeZ(u8, t)
         else
             null;
-
         defer if (title_z) |t| allocator.free(t);
 
         const handle = c.stray_create(
@@ -117,7 +115,7 @@ pub const Icon = struct {
     ) !void {
         const Wrapper = struct {
             fn call(data: ?*anyopaque) callconv(.c) void {
-                const ctx = @as(*CallbackContext, @ptrCast(@alignCast(data)));
+                const ctx = @as(*CallbackContext, @ptrCast(@alignCast(data.?)));
                 ctx.callback(ctx.user_data);
             }
         };
@@ -230,13 +228,8 @@ pub const Icon = struct {
 
         self.owned_pixmaps.deinit();
 
-        // clean up the menu contexts
         if (self.menu) |menu| {
-            for (menu.contexts.items) |ctx| {
-                self.allocator.destroy(ctx);
-            }
-
-            menu.contexts.deinit();
+            menu.destroy();
             self.menu = null;
         }
 
@@ -249,6 +242,7 @@ pub const Menu = struct {
     handle: ?*c.TrayMenu,
     allocator: std.mem.Allocator,
     contexts: std.array_list.Managed(*MenuCallbackContext),
+    owned_menus: std.array_list.Managed(*Menu), // track submenus for cleanup
 
     /// Creates a new menu.
     pub fn create(allocator: std.mem.Allocator) !Menu {
@@ -260,6 +254,8 @@ pub const Menu = struct {
             .allocator = allocator,
             .contexts = std.array_list.Managed(*MenuCallbackContext)
                 .init(allocator),
+
+            .owned_menus = std.array_list.Managed(*Menu).init(allocator),
         };
     }
 
@@ -277,7 +273,7 @@ pub const Menu = struct {
             fn call(menu_id: c_int, data: ?*anyopaque) callconv(.c) void {
                 const ctx = @as(
                     *MenuCallbackContext,
-                    @ptrCast(@alignCast(data)),
+                    @ptrCast(@alignCast(data.?)),
                 );
 
                 ctx.callback(menu_id, ctx.user_data);
@@ -297,7 +293,12 @@ pub const Menu = struct {
             ctx,
         );
 
-        if (id < 0) return error.AddItemFailed;
+        if (id < 0) {
+            self.allocator.destroy(ctx);
+            _ = self.contexts.pop();
+            return error.AddItemFailed;
+        }
+
         return id;
     }
 
@@ -322,9 +323,8 @@ pub const Menu = struct {
             fn call(menu_id: c_int, data: ?*anyopaque) callconv(.c) void {
                 const ctx = @as(
                     *MenuCallbackContext,
-                    @ptrCast(@alignCast(data)),
+                    @ptrCast(@alignCast(data.?)),
                 );
-
                 ctx.callback(menu_id, ctx.user_data);
             }
         };
@@ -342,7 +342,12 @@ pub const Menu = struct {
             ctx,
         );
 
-        if (id < 0) return error.AddCheckItemFailed;
+        if (id < 0) {
+            self.allocator.destroy(ctx);
+            _ = self.contexts.pop();
+            return error.AddCheckItemFailed;
+        }
+
         return id;
     }
 
@@ -360,7 +365,7 @@ pub const Menu = struct {
             fn call(menu_id: c_int, data: ?*anyopaque) callconv(.c) void {
                 const ctx = @as(
                     *MenuCallbackContext,
-                    @ptrCast(@alignCast(data)),
+                    @ptrCast(@alignCast(data.?)),
                 );
                 ctx.callback(menu_id, ctx.user_data);
             }
@@ -379,8 +384,43 @@ pub const Menu = struct {
             ctx,
         );
 
-        if (id < 0) return error.AddRadioItemFailed;
+        if (id < 0) {
+            self.allocator.destroy(ctx);
+            _ = self.contexts.pop();
+            return error.AddRadioItemFailed;
+        }
+
         return id;
+    }
+
+    /// Adds a submenu to this menu.
+    /// The submenu lifetime is managed by the C library.
+    pub fn addSubmenu(
+        self: *Menu,
+        label: []const u8,
+        submenu: *Menu,
+    ) !i32 {
+        const label_z = try self.allocator.dupeZ(u8, label);
+        defer self.allocator.free(label_z);
+
+        const id = c.stray_menu_add_submenu(
+            self.handle,
+            label_z.ptr,
+            submenu.handle,
+        );
+
+        if (id < 0) return error.AddSubmenuFailed;
+
+        // track the submenu for cleanup
+        try self.owned_menus.append(submenu);
+
+        return id;
+    }
+
+    /// Gets the submenu associated with a menu item.
+    /// Returns null if the item has no submenu.
+    pub fn getSubmenu(self: *Menu, item_id: i32) ?*c.TrayMenu {
+        return c.stray_menu_get_submenu(self.handle, item_id);
     }
 
     /// Sets whether a menu item is checked.
@@ -406,6 +446,24 @@ pub const Menu = struct {
         const label_z = try self.allocator.dupeZ(u8, label);
         defer self.allocator.free(label_z);
         c.stray_menu_set_item_label(self.handle, item_id, label_z.ptr);
+    }
+
+    /// Destroys the menu and all its resources
+    pub fn destroy(self: *Menu) void {
+        // the C library will handle the actual menu destruction
+        // when the parent icon is destroyed
+
+        for (self.contexts.items) |ctx| {
+            self.allocator.destroy(ctx);
+        }
+
+        self.contexts.deinit();
+
+        for (self.owned_menus.items) |submenu| {
+            submenu.destroy();
+        }
+
+        self.owned_menus.deinit();
     }
 };
 

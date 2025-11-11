@@ -47,62 +47,93 @@ typedef enum {
 } TrayMenuItemType;
 
 /* Icon API */
+
+/* Creates the tray icon. */
 TrayIcon *
 stray_create(const char *app_name, const char *icon_name, const char *title);
+/* Sets the click callback. */
 void stray_set_click_callback(
     TrayIcon *icon, TrayClickCallback callback, void *user_data);
 
+/* Processes the events. */
 void stray_process_events(TrayIcon *icon);
+/* Sets the icon title. */
 void stray_set_title(TrayIcon *icon, const char *title);
+/* Sets the named icon. */
 void stray_set_icon(TrayIcon *icon, const char *icon_name);
+/* Sets the tooltip. */
 void stray_set_tooltip(TrayIcon *icon, const char *title, const char *text);
+/* Destroys the icon and its content, then unregisters from D-Bus */
 void stray_destroy(TrayIcon *icon);
+/* Registers with D-Bus */
 int stray_register(TrayIcon *icon);
 
+/* Creates a pixmap. */
+StrayPixmap *stray_pixmap_create(int width, int height, const uint32_t *data);
+static void stray_pixmap_destroy(StrayPixmap *pixmap);
+/* Sets the pixmap icon. */
 void stray_set_icon_pixmap(
     TrayIcon *icon, int width, int height, const uint32_t *data);
 
 /* Menu API */
+
+/* Creates the menu */
 TrayMenu *stray_menu_create(void);
+/* Sets the menu for the icon. */
 void stray_set_menu(TrayIcon *icon, TrayMenu *menu);
+/* Sets the item label */
 void stray_menu_set_item_label(TrayMenu *menu, int item_id, const char *label);
+/* Adds a separator. */
 int stray_menu_add_separator(TrayMenu *menu);
+/* Adds a menu item. */
 int stray_menu_add_item(
     TrayMenu *menu, const char *label, TrayMenuCallback callback,
     void *user_data);
 
+/* Adds the checked item. */
 int stray_menu_add_check_item(
     TrayMenu *menu, const char *label, TrayMenuCallback callback,
     void *user_data);
 
+/* Adds the radio item. */
 int stray_menu_add_radio_item(
     TrayMenu *menu, const char *label, TrayMenuCallback callback,
     void *user_data);
 
+/* Sets the state for the checked item. */
 void stray_menu_set_item_checked(
     TrayMenu *menu, int item_id, dbus_bool_t checked);
 
+/* Sets the item state. */
 void stray_menu_set_item_enabled(
     TrayMenu *menu, int item_id, dbus_bool_t enabled);
+
+/* Adds a submenu to the main menu. */
+int stray_menu_add_submenu(
+    TrayMenu *menu, const char *label, TrayMenu *submenu);
+TrayMenu *stray_menu_get_submenu(TrayMenu *menu, int item_id);
 
 #ifdef STRAY_IMPL
 
 struct TrayMenuItem {
+    TrayMenuCallback callback;
+    TrayMenuItemType type;
+    TrayMenu *submenu;
+
     int id;
     char *label;
-    TrayMenuItemType type;
     dbus_bool_t enabled;
     dbus_bool_t checked;
-    TrayMenuCallback callback;
     void *user_data;
 };
 
 struct TrayMenu {
     TrayMenuItem **items;
+    TrayMenu *parent;
+    TrayIcon *icon;
     int item_count;
     int item_capacity;
     int next_id;
-    TrayIcon *icon;
 };
 
 struct TrayIcon {
@@ -113,9 +144,9 @@ struct TrayIcon {
     char *tooltip_title;
     char *tooltip_text;
 
+    TrayMenu *menu;
     TrayClickCallback click_callback;
     void *user_data;
-    TrayMenu *menu;
 
     StrayPixmap *icon_pixmaps;
     int icon_pixmap_count;
@@ -246,6 +277,40 @@ static TrayMenuItem *find_menu_item(TrayMenu *menu, dbus_int32_t id) {
     return NULL;
 }
 
+static TrayMenuItem *find_menu_item_recursive(TrayMenu *menu, dbus_int32_t id) {
+    int i;
+    TrayMenuItem *item;
+
+    if (!menu) return NULL;
+
+    /* check items in this menu */
+    for (i = 0; i < menu->item_count; i++) {
+        if (menu->items[i] && menu->items[i]->id == id) {
+            return menu->items[i];
+        }
+
+        /* check submenu presence */
+        if (menu->items[i] && menu->items[i]->submenu) {
+            item = find_menu_item_recursive(menu->items[i]->submenu, id);
+            if (item) return item;
+        }
+    }
+
+    return NULL;
+}
+
+static TrayIcon *get_root_icon(TrayMenu *menu) {
+    TrayMenu *root = menu;
+
+    if (!menu) return NULL;
+
+    while (root->parent) {
+        root = root->parent;
+    }
+
+    return root->icon;
+}
+
 static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
     const char *interface;
     const char *current_icon;
@@ -358,6 +423,14 @@ add_menu_item_properties(DBusMessageIter *props, TrayMenuItem *item) {
     visible = TRUE;
     add_dict_entry(props, "visible", DBUS_TYPE_BOOLEAN, "b", &visible);
 
+    /* add children-display property for items with submenus */
+    if (item->submenu) {
+        const char *children_display = "submenu";
+        add_dict_entry(
+            props, "children-display", DBUS_TYPE_STRING, "s",
+            &children_display);
+    }
+
     if (item->type == STRAY_MENU_ITEM_CHECK ||
         item->type == STRAY_MENU_ITEM_RADIO) {
         dbus_int32_t toggle_state;
@@ -391,7 +464,9 @@ static void emit_menu_items_updated(TrayIcon *icon, int *item_ids, int count) {
         &args, DBUS_TYPE_ARRAY, "(ia{sv})", &updated_array);
 
     for (i = 0; i < count; i++) {
-        TrayMenuItem *item = find_menu_item(icon->menu, item_ids[i]);
+        /* find items in submenus */
+        TrayMenuItem *item = find_menu_item_recursive(icon->menu, item_ids[i]);
+
         if (item) {
             DBusMessageIter item_struct, props_array;
 
@@ -550,7 +625,8 @@ static void handle_property_get(
         dbus_message_iter_open_container(
             &args, DBUS_TYPE_VARIANT, "a(iiay)", &variant);
 
-        add_pixmap_array(&variant, icon); /* pass the icon to get pixmap data */
+        /* pass the icon to get pixmap data */
+        add_pixmap_array(&variant, icon);
         dbus_message_iter_close_container(&args, &variant);
     } else if (strcmp(prop, "Menu") == 0) {
         DBusMessageIter variant;
@@ -586,6 +662,44 @@ static void handle_property_get(
     dbus_message_unref(reply);
 }
 
+static void
+add_menu_items_recursive(DBusMessageIter *parent_children, TrayMenu *menu) {
+    int i;
+
+    if (!menu) return;
+
+    for (i = 0; i < menu->item_count; i++) {
+        DBusMessageIter child_variant, child_struct, child_props,
+            child_children;
+        TrayMenuItem *item = menu->items[i];
+        if (!item) continue;
+
+        dbus_message_iter_open_container(
+            parent_children, DBUS_TYPE_VARIANT, "(ia{sv}av)", &child_variant);
+        dbus_message_iter_open_container(
+            &child_variant, DBUS_TYPE_STRUCT, NULL, &child_struct);
+        dbus_message_iter_append_basic(
+            &child_struct, DBUS_TYPE_INT32, &item->id);
+        dbus_message_iter_open_container(
+            &child_struct, DBUS_TYPE_ARRAY, "{sv}", &child_props);
+
+        add_menu_item_properties(&child_props, item);
+
+        dbus_message_iter_close_container(&child_struct, &child_props);
+        dbus_message_iter_open_container(
+            &child_struct, DBUS_TYPE_ARRAY, "v", &child_children);
+
+        /* recursively add submenu items */
+        if (item->submenu) {
+            add_menu_items_recursive(&child_children, item->submenu);
+        }
+
+        dbus_message_iter_close_container(&child_struct, &child_children);
+        dbus_message_iter_close_container(&child_variant, &child_struct);
+        dbus_message_iter_close_container(parent_children, &child_variant);
+    }
+}
+
 static DBusHandlerResult
 handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     DBusMessageIter args, root_struct, root_props, root_children;
@@ -593,7 +707,6 @@ handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     dbus_uint32_t revision;
     dbus_int32_t root_id;
     const char *prop_value;
-    int i;
 
     if (!icon || !icon->menu) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
@@ -620,31 +733,7 @@ handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     dbus_message_iter_open_container(
         &root_struct, DBUS_TYPE_ARRAY, "v", &root_children);
 
-    for (i = 0; i < icon->menu->item_count; i++) {
-        DBusMessageIter child_variant, child_struct, child_props,
-            child_children;
-        TrayMenuItem *item = icon->menu->items[i];
-        if (!item) continue;
-
-        dbus_message_iter_open_container(
-            &root_children, DBUS_TYPE_VARIANT, "(ia{sv}av)", &child_variant);
-        dbus_message_iter_open_container(
-            &child_variant, DBUS_TYPE_STRUCT, NULL, &child_struct);
-        dbus_message_iter_append_basic(
-            &child_struct, DBUS_TYPE_INT32, &item->id);
-        dbus_message_iter_open_container(
-            &child_struct, DBUS_TYPE_ARRAY, "{sv}", &child_props);
-
-        add_menu_item_properties(&child_props, item);
-
-        dbus_message_iter_close_container(&child_struct, &child_props);
-        dbus_message_iter_open_container(
-            &child_struct, DBUS_TYPE_ARRAY, "v", &child_children);
-
-        dbus_message_iter_close_container(&child_struct, &child_children);
-        dbus_message_iter_close_container(&child_variant, &child_struct);
-        dbus_message_iter_close_container(&root_children, &child_variant);
-    }
+    add_menu_items_recursive(&root_children, icon->menu);
 
     dbus_message_iter_close_container(&root_struct, &root_children);
     dbus_message_iter_close_container(&args, &root_struct);
@@ -671,7 +760,7 @@ handle_menu_event(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     dbus_message_iter_get_basic(&iter, &type);
 
     if (strcmp(type, "clicked") == 0) {
-        TrayMenuItem *item = find_menu_item(icon->menu, id);
+        TrayMenuItem *item = find_menu_item_recursive(icon->menu, id);
         if (item && item->callback) { item->callback(id, item->user_data); }
     }
 
@@ -711,7 +800,7 @@ static DBusHandlerResult handle_menu_get_group_properties(
             dbus_int32_t id;
 
             dbus_message_iter_get_basic(&id_array_iter, &id);
-            item = find_menu_item(icon->menu, id);
+            item = find_menu_item_recursive(icon->menu, id);
 
             if (item) {
                 DBusMessageIter tuple, item_props;
@@ -868,9 +957,7 @@ register_with_watcher(DBusConnection *conn, const char *service_name) {
     dbus_message_unref(msg);
 
     if (dbus_error_is_set(&err)) {
-        fprintf(
-            stderr, "Failed to register with StatusNotifierWatcher: %s\n",
-            err.message);
+        fprintf(stderr, "D-Bus: %s\n", err.message);
 
         dbus_error_free(&err);
         return 0;
@@ -1016,10 +1103,7 @@ int stray_register(TrayIcon *icon) {
     emit_properties_changed(icon, "All");
     process_events_with_timeout(icon->conn, 100);
 
-    if (!register_with_watcher(icon->conn, icon->service_name)) {
-        fprintf(stderr, "Failed to register with StatusNotifierWatcher\n");
-        return 0;
-    }
+    if (!register_with_watcher(icon->conn, icon->service_name)) { return 0; }
 
     process_events_with_timeout(icon->conn, 100);
     return 1;
@@ -1083,7 +1167,6 @@ void stray_set_tooltip(TrayIcon *icon, const char *title, const char *text) {
     emit_properties_changed(icon, "ToolTip");
 }
 
-/* Set icon pixmap */
 void stray_set_icon_pixmap(
     TrayIcon *icon, int width, int height, const uint32_t *data) {
     if (!icon) return;
@@ -1149,6 +1232,7 @@ TrayMenu *stray_menu_create(void) {
         menu->item_capacity = 8;
         menu->items = calloc(menu->item_capacity, sizeof(TrayMenuItem *));
         menu->icon = NULL;
+        menu->parent = NULL;
 
         for (i = 0; i < menu->item_capacity; i++) {
             menu->items[i] = NULL;
@@ -1194,6 +1278,7 @@ static TrayMenuItem *create_menu_item(
     item->checked = FALSE;
     item->callback = callback;
     item->user_data = user_data;
+    item->submenu = NULL;
 
     if (label) {
         item->label = strdup(label);
@@ -1260,21 +1345,60 @@ int stray_menu_add_radio_item(
     return item ? item->id : -1;
 }
 
+int stray_menu_add_submenu(
+    TrayMenu *menu, const char *label, TrayMenu *submenu) {
+    TrayMenuItem *item;
+
+    if (!menu || !submenu) return -1;
+
+    item = create_menu_item(menu, label, STRAY_MENU_ITEM_NORMAL, NULL, NULL);
+    if (!item) return -1;
+
+    item->submenu = submenu;
+    submenu->parent = menu;
+
+    /* notify the system if we have an icon */
+    if (menu->icon) {
+        TrayIcon *icon = get_root_icon(menu);
+        if (icon) { emit_properties_changed(icon, "All"); }
+    }
+
+    return item->id;
+}
+
+TrayMenu *stray_menu_get_submenu(TrayMenu *menu, int item_id) {
+    TrayMenuItem *item;
+
+    if (!menu) return NULL;
+
+    item = find_menu_item(menu, item_id);
+    if (!item) return NULL;
+
+    return item->submenu;
+}
+
 void stray_menu_set_item_checked(
     TrayMenu *menu, int item_id, dbus_bool_t checked) {
     TrayMenuItem *item;
+    TrayIcon *icon;
 
     if (!menu) return;
 
-    item = find_menu_item(menu, item_id);
+    icon = get_root_icon(menu);
+
+    if (icon) {
+        item = find_menu_item_recursive(icon->menu, item_id);
+    } else {
+        item = find_menu_item(menu, item_id);
+    }
 
     if (item) {
         item->checked = checked;
 
-        if (menu->icon) {
+        if (icon) {
             int ids[1];
             ids[0] = item_id;
-            emit_menu_items_updated(menu->icon, ids, 1);
+            emit_menu_items_updated(icon, ids, 1);
         }
     }
 }
@@ -1282,28 +1406,41 @@ void stray_menu_set_item_checked(
 void stray_menu_set_item_enabled(
     TrayMenu *menu, int item_id, dbus_bool_t enabled) {
     TrayMenuItem *item;
+    TrayIcon *icon;
 
     if (!menu) return;
 
-    item = find_menu_item(menu, item_id);
+    icon = get_root_icon(menu);
+    if (icon) {
+        item = find_menu_item_recursive(icon->menu, item_id);
+    } else {
+        item = find_menu_item(menu, item_id);
+    }
 
     if (item) {
         item->enabled = enabled;
 
-        if (menu->icon) {
+        if (icon) {
             int ids[1];
             ids[0] = item_id;
-            emit_menu_items_updated(menu->icon, ids, 1);
+            emit_menu_items_updated(icon, ids, 1);
         }
     }
 }
 
 void stray_menu_set_item_label(TrayMenu *menu, int item_id, const char *label) {
     TrayMenuItem *item;
+    TrayIcon *icon;
 
     if (!menu) return;
 
-    item = find_menu_item(menu, item_id);
+    icon = get_root_icon(menu);
+
+    if (icon) {
+        item = find_menu_item_recursive(icon->menu, item_id);
+    } else {
+        item = find_menu_item(menu, item_id);
+    }
 
     if (item) {
         char *new_label;
@@ -1315,10 +1452,10 @@ void stray_menu_set_item_label(TrayMenu *menu, int item_id, const char *label) {
         free(item->label);
         item->label = new_label;
 
-        if (menu->icon) {
+        if (icon) {
             int ids[1];
             ids[0] = item_id;
-            emit_menu_items_updated(menu->icon, ids, 1);
+            emit_menu_items_updated(icon, ids, 1);
         }
     }
 }
@@ -1335,13 +1472,17 @@ void stray_set_menu(TrayIcon *icon, TrayMenu *menu) {
     emit_properties_changed(icon, "All");
 }
 
-static void stray_menu_destroy(TrayMenu *menu) {
+static void stray_menu_destroy_recursive(TrayMenu *menu) {
     int i;
 
     if (!menu) return;
 
     for (i = 0; i < menu->item_count; i++) {
         if (menu->items[i]) {
+            if (menu->items[i]->submenu) {
+                stray_menu_destroy_recursive(menu->items[i]->submenu);
+            }
+
             free(menu->items[i]->label);
             free(menu->items[i]);
         }
@@ -1349,6 +1490,10 @@ static void stray_menu_destroy(TrayMenu *menu) {
 
     free(menu->items);
     free(menu);
+}
+
+static void stray_menu_destroy(TrayMenu *menu) {
+    stray_menu_destroy_recursive(menu);
 }
 
 void stray_destroy(TrayIcon *icon) {
