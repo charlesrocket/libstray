@@ -19,8 +19,11 @@ pub fn main() !void {
     var icon = try Icon.create(allocator, "stray-demo", "starred", "STRAY demo");
     defer icon.destroy();
 
-    // create menu
+    // create menus
     var menu = try Menu.create(allocator);
+    var submenu = try Menu.create(allocator);
+
+    _ = try submenu.addItem("Open", onOpen, null);
 
     // add menu items
     _ = try menu.addItem("Open", onOpen, null);
@@ -30,6 +33,9 @@ pub fn main() !void {
         onCheck,
         &is_checked,
     );
+
+    // add submenu to main menu
+    _ = try menu.addSubmenu("Submenu", &submenu);
 
     _ = try menu.addSeparator();
 

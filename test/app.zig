@@ -15,7 +15,9 @@ pub fn main() !void {
     defer icon.destroy();
 
     var menu = try Menu.create(allocator);
+    var submenu = try Menu.create(allocator);
 
+    _ = try submenu.addItem("Open", onOpen, null);
     _ = try menu.addItem("Open", onOpen, null);
     _ = try menu.addSeparator();
     const disabled_item = try menu.addCheckItem("Test feature", onToggle, null);
@@ -25,6 +27,7 @@ pub fn main() !void {
         &is_checked,
     );
 
+    _ = try menu.addSubmenu("Submenu", &submenu);
     _ = try menu.addSeparator();
     _ = try menu.addItem("Quit", onQuit, &is_active);
 
