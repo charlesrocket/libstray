@@ -61,19 +61,15 @@ void stray_process_events(TrayIcon *icon);
 void stray_set_title(TrayIcon *icon, const char *title);
 /* Sets the named icon. */
 void stray_set_icon(TrayIcon *icon, const char *icon_name);
+/* Sets the pixmap icon. */
+void stray_set_icon_pixmap(
+    TrayIcon *icon, int width, int height, const uint32_t *data);
 /* Sets the tooltip. */
 void stray_set_tooltip(TrayIcon *icon, const char *title, const char *text);
 /* Destroys the icon and its content, then unregisters from D-Bus */
 void stray_destroy(TrayIcon *icon);
 /* Registers with D-Bus */
 int stray_register(TrayIcon *icon);
-
-/* Creates a pixmap. */
-StrayPixmap *stray_pixmap_create(int width, int height, const uint32_t *data);
-static void stray_pixmap_destroy(StrayPixmap *pixmap);
-/* Sets the pixmap icon. */
-void stray_set_icon_pixmap(
-    TrayIcon *icon, int width, int height, const uint32_t *data);
 
 /* Menu API */
 
@@ -1232,13 +1228,6 @@ void stray_set_icon_pixmap(
     emit_properties_changed(icon, "IconPixmap");
 }
 
-static void stray_pixmap_destroy(StrayPixmap *pixmap) {
-    if (pixmap) {
-        free(pixmap->data);
-        free(pixmap);
-    }
-}
-
 static void stray_clear_icon_pixmap(TrayIcon *icon) {
     if (!icon) return;
 
@@ -1546,7 +1535,7 @@ void stray_set_menu(TrayIcon *icon, TrayMenu *menu) {
     emit_properties_changed(icon, "All");
 }
 
-static void stray_menu_destroy_recursive(TrayMenu *menu) {
+static void stray_menu_destroy(TrayMenu *menu) {
     int i;
 
     if (!menu) return;
@@ -1554,7 +1543,7 @@ static void stray_menu_destroy_recursive(TrayMenu *menu) {
     for (i = 0; i < menu->item_count; i++) {
         if (menu->items[i]) {
             if (menu->items[i]->submenu) {
-                stray_menu_destroy_recursive(menu->items[i]->submenu);
+                stray_menu_destroy(menu->items[i]->submenu);
             }
 
             free(menu->items[i]->label);
@@ -1565,10 +1554,6 @@ static void stray_menu_destroy_recursive(TrayMenu *menu) {
 
     free(menu->items);
     free(menu);
-}
-
-static void stray_menu_destroy(TrayMenu *menu) {
-    stray_menu_destroy_recursive(menu);
 }
 
 void stray_destroy(TrayIcon *icon) {
