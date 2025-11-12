@@ -124,6 +124,7 @@ pub fn main() !void {
             std.debug.print("Changing menu item icon\n", .{});
             try menu.setItemIcon(open_item, "document-save");
         } else if (count == 30) {
+            icon.setStatus(.passive);
             std.debug.print("Exiting\n", .{});
             is_active = false;
         }
