@@ -27,6 +27,8 @@ pub fn main() !void {
         &is_checked,
     );
 
+    try menu.setItemIcon(disabled_item, "dialog-warning");
+
     _ = try menu.addSubmenu("Submenu", &submenu);
     _ = try menu.addSeparator();
     _ = try menu.addItem("Quit", onQuit, &is_active);

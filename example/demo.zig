@@ -23,19 +23,27 @@ pub fn main() !void {
     var menu = try Menu.create(allocator);
     var submenu = try Menu.create(allocator);
 
-    _ = try submenu.addItem("Open", onOpen, null);
+    const submenu_open_item = try submenu.addItem("Open", onOpen, null);
+    try submenu.setItemIcon(submenu_open_item, "document-open");
 
-    // add menu items
-    _ = try menu.addItem("Open", onOpen, null);
+    // add menu items with icons
+    const open_item = try menu.addItem("Open", onOpen, null);
+    try menu.setItemIcon(open_item, "document-open");
+
     const disabled_item = try menu.addItem("Disabled item", onToggle, null);
+    try menu.setItemIcon(disabled_item, "dialog-warning");
+
     const checked_item = try menu.addCheckItem(
         "Checked item",
         onCheck,
         &is_checked,
     );
 
-    // add submenu to main menu
-    _ = try menu.addSubmenu("Submenu", &submenu);
+    try menu.setItemIcon(checked_item, "emblem-default");
+
+    // add a submenu to the main menu
+    const submenu_item = try menu.addSubmenu("Submenu", &submenu);
+    try menu.setItemIcon(submenu_item, "folder");
 
     _ = try menu.addSeparator();
 
@@ -46,17 +54,23 @@ pub fn main() !void {
         &radio_group,
     );
 
+    try menu.setItemIcon(radio_group.option1_id, "audio-volume-low");
+
     radio_group.option2_id = try menu.addRadioItem(
         "Radio Option 2",
         onRadio,
         &radio_group,
     );
 
+    try menu.setItemIcon(radio_group.option2_id, "audio-volume-medium");
+
     radio_group.option3_id = try menu.addRadioItem(
         "Radio Option 3",
         onRadio,
         &radio_group,
     );
+
+    try menu.setItemIcon(radio_group.option3_id, "audio-volume-high");
 
     // set the initial radio state (Option 1 selected)
     radio_group.selected_id = radio_group.option1_id;
@@ -65,7 +79,9 @@ pub fn main() !void {
     icon.setMenuItemChecked(radio_group.option3_id, false);
 
     _ = try menu.addSeparator();
-    _ = try menu.addItem("Quit", onQuit, &is_active);
+
+    const quit_item = try menu.addItem("Quit", onQuit, &is_active);
+    try menu.setItemIcon(quit_item, "application-exit");
 
     // set menu
     icon.setMenu(&menu);
@@ -87,8 +103,8 @@ pub fn main() !void {
         .{},
     );
 
-    // create and set custom pixmap icon
-    const custom_icon = try createCustomIcon(allocator);
+    // create a custom pixmap icon
+    const custom_icon = try createCustomIcon(allocator, 0xA020F0);
     defer allocator.free(custom_icon);
 
     // main event loop
@@ -103,6 +119,9 @@ pub fn main() !void {
         } else if (count == 10) {
             std.debug.print("Setting the tooltip\n", .{});
             try icon.setTooltip("Demo", "text");
+        } else if (count == 15) {
+            std.debug.print("Changing menu item icon\n", .{});
+            try menu.setItemIcon(open_item, "document-save");
         } else if (count == 30) {
             std.debug.print("Exiting\n", .{});
             is_active = false;
@@ -208,14 +227,12 @@ fn onQuit(menu_id: i32, user_data: ?*anyopaque) void {
     std.debug.print("Quit clicked!\n", .{});
 }
 
-fn createCustomIcon(allocator: std.mem.Allocator) ![]u32 {
+fn createCustomIcon(allocator: std.mem.Allocator, color: u32) ![]u32 {
     const width: i32 = 16;
     const height: i32 = 16;
     const pixel_count = @as(usize, @intCast(width * height));
 
     var pixels = try allocator.alloc(u32, pixel_count);
-
-    const color = 0xA020F0;
 
     for (0..pixel_count) |i| {
         pixels[i] = color;
