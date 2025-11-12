@@ -705,23 +705,33 @@ handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     DBusMessageIter args, root_struct, root_props, root_children;
     DBusMessage *reply;
     dbus_uint32_t revision;
-    dbus_int32_t root_id;
+    dbus_int32_t parent_id;
+    dbus_int32_t recursion_depth;
+    DBusMessageIter iter;
     const char *prop_value;
+    TrayMenu *target_menu;
+    TrayMenuItem *parent_item;
 
     if (!icon || !icon->menu) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-    reply = dbus_message_new_method_return(msg);
+    /* read the parent_id parameter */
+    if (!dbus_message_iter_init(msg, &iter))
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
+    dbus_message_iter_get_basic(&iter, &parent_id);
+    dbus_message_iter_next(&iter);
+    dbus_message_iter_get_basic(&iter, &recursion_depth);
+
+    reply = dbus_message_new_method_return(msg);
     if (!reply) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
     revision = 1;
-    root_id = 0;
 
     dbus_message_iter_init_append(reply, &args);
     dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, &revision);
     dbus_message_iter_open_container(
         &args, DBUS_TYPE_STRUCT, NULL, &root_struct);
-    dbus_message_iter_append_basic(&root_struct, DBUS_TYPE_INT32, &root_id);
+    dbus_message_iter_append_basic(&root_struct, DBUS_TYPE_INT32, &parent_id);
     dbus_message_iter_open_container(
         &root_struct, DBUS_TYPE_ARRAY, "{sv}", &root_props);
 
@@ -733,7 +743,18 @@ handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     dbus_message_iter_open_container(
         &root_struct, DBUS_TYPE_ARRAY, "v", &root_children);
 
-    add_menu_items_recursive(&root_children, icon->menu);
+    /* determine which menu to show based on parent_id */
+    if (parent_id == 0) {
+        /* root menu—show main menu items */
+        add_menu_items_recursive(&root_children, icon->menu);
+    } else {
+        /* find the item with this ID and show its submenu */
+        parent_item = find_menu_item_recursive(icon->menu, parent_id);
+
+        if (parent_item && parent_item->submenu) {
+            add_menu_items_recursive(&root_children, parent_item->submenu);
+        }
+    }
 
     dbus_message_iter_close_container(&root_struct, &root_children);
     dbus_message_iter_close_container(&args, &root_struct);
