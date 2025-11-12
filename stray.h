@@ -1316,6 +1316,7 @@ void stray_set_status(TrayIcon *icon, TrayStatus status) {
 
     if (icon->status != status) {
         icon->status = status;
+        emit_signal(icon, "NewStatus");
         emit_properties_changed(icon, "Status");
     }
 }
