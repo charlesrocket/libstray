@@ -119,6 +119,7 @@ pub fn main() !void {
         } else if (count == 10) {
             std.debug.print("Setting the tooltip\n", .{});
             try icon.setTooltip("Demo", "text");
+            icon.setStatus(.needs_attention);
         } else if (count == 15) {
             std.debug.print("Changing menu item icon\n", .{});
             try menu.setItemIcon(open_item, "document-save");

@@ -49,7 +49,9 @@ pub fn main() !void {
     var count: usize = 0;
     while (is_active) {
         if (count == 1) try icon.setIconPixmap(16, 16, custom_icon);
+        if (count == 2) icon.setStatus(.needs_attention);
         if (count == 3) is_active = false;
+
         count += 1;
         icon.setMenuItemChecked(checked_item, !is_checked);
         icon.processEvents();

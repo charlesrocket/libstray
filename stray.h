@@ -46,11 +46,19 @@ typedef enum {
     STRAY_MENU_ITEM_RADIO = 3
 } TrayMenuItemType;
 
+typedef enum {
+    STRAY_STATUS_PASSIVE = 0,
+    STRAY_STATUS_ACTIVE = 1,
+    STRAY_STATUS_NEEDS_ATTENTION = 2
+} TrayStatus;
+
 /* Icon API */
 
 /* Creates the tray icon. */
 TrayIcon *
 stray_create(const char *app_name, const char *icon_name, const char *title);
+/* Sets the icon status */
+void stray_set_status(TrayIcon *icon, TrayStatus status);
 /* Sets the click callback. */
 void stray_set_click_callback(
     TrayIcon *icon, TrayClickCallback callback, void *user_data);
@@ -146,6 +154,7 @@ struct TrayIcon {
     char *tooltip_title;
     char *tooltip_text;
 
+    TrayStatus status;
     TrayMenu *menu;
     TrayClickCallback click_callback;
     void *user_data;
@@ -526,12 +535,27 @@ static void emit_menu_items_updated(TrayIcon *icon, int *item_ids, int count) {
 
 static void get_icon_properties(
     TrayIcon *icon, const char **out_icon, const char **out_title,
-    const char **out_menu, dbus_bool_t *out_is_menu, const char **out_id) {
+    const char **out_menu, dbus_bool_t *out_is_menu, const char **out_id,
+    const char **out_status) {
     *out_icon = icon->icon_name ? icon->icon_name : STRAY_DEFAULT_ICON;
     *out_title = icon->title ? icon->title : STRAY_DEFAULT_TITLE;
     *out_menu = icon->menu ? STRAY_MENU_OBJECT_PATH : "/NO_DBUSMENU";
     *out_is_menu = (icon->menu != NULL);
     *out_id = icon->title ? icon->title : STRAY_DEFAULT_ID;
+
+    switch (icon->status) {
+        case STRAY_STATUS_PASSIVE:
+            *out_status = "Passive";
+            break;
+        case STRAY_STATUS_ACTIVE:
+            *out_status = "Active";
+            break;
+        case STRAY_STATUS_NEEDS_ATTENTION:
+            *out_status = "NeedsAttention";
+            break;
+        default:
+            *out_status = "Active";
+    }
 }
 
 static void handle_property_get_all(
@@ -550,14 +574,13 @@ static void handle_property_get_all(
     if (!reply) return;
 
     get_icon_properties(
-        icon, &current_icon, &current_title, &menu_path, &item_is_menu,
-        &id_str);
+        icon, &current_icon, &current_title, &menu_path, &item_is_menu, &id_str,
+        &status_str);
 
     dbus_message_iter_init_append(reply, &args);
     dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "{sv}", &array);
 
     category_str = "ApplicationStatus";
-    status_str = "Active";
     empty_str = "";
 
     /* add standard properties */
@@ -629,13 +652,12 @@ static void handle_property_get(
     if (!reply) return;
 
     get_icon_properties(
-        icon, &current_icon, &current_title, &menu_path, &item_is_menu,
-        &id_str);
+        icon, &current_icon, &current_title, &menu_path, &item_is_menu, &id_str,
+        &status_str);
 
     dbus_message_iter_init_append(reply, &args);
 
     category_str = "ApplicationStatus";
-    status_str = "Active";
     theme_path = "";
 
     if (strcmp(prop, "Category") == 0) {
@@ -1108,6 +1130,7 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
     /* set initial values */
     icon->conn = conn;
     icon->service_name = strdup(service_name);
+    icon->status = STRAY_STATUS_ACTIVE;
     icon->icon_name = safe_strdup(icon_name ? icon_name : STRAY_DEFAULT_ICON);
     icon->title = safe_strdup(title ? title : app_name);
     icon->tooltip_title = NULL;
@@ -1286,6 +1309,15 @@ TrayMenu *stray_menu_create(void) {
     }
 
     return menu;
+}
+
+void stray_set_status(TrayIcon *icon, TrayStatus status) {
+    if (!icon) return;
+
+    if (icon->status != status) {
+        icon->status = status;
+        emit_properties_changed(icon, "Status");
+    }
 }
 
 static int menu_ensure_capacity(TrayMenu *menu) {

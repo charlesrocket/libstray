@@ -12,6 +12,13 @@ pub const ClickCallback = *const fn (user_data: ?*anyopaque) void;
 /// Menu callback function.
 pub const MenuCallback = *const fn (menu_id: i32, user_data: ?*anyopaque) void;
 
+/// Tray icon status.
+pub const Status = enum(c_uint) {
+    passive = c.STRAY_STATUS_PASSIVE,
+    active = c.STRAY_STATUS_ACTIVE,
+    needs_attention = c.STRAY_STATUS_NEEDS_ATTENTION,
+};
+
 /// Pixmap structure for ARGB32 icon data.
 pub const Pixmap = extern struct {
     width: i32,
@@ -90,6 +97,11 @@ pub const Icon = struct {
         if (c.stray_register(self.handle) == 0) {
             return error.RegisterFailed;
         }
+    }
+
+    /// Sets the icon status.
+    pub fn setStatus(self: *Icon, status: Status) void {
+        c.stray_set_status(self.handle, @intFromEnum(status));
     }
 
     /// Sets the click callback.
