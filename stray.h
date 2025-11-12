@@ -90,23 +90,27 @@ int stray_menu_add_item(
     TrayMenu *menu, const char *label, TrayMenuCallback callback,
     void *user_data);
 
-/* Adds the checked item. */
+/* Adds a checked item. */
 int stray_menu_add_check_item(
     TrayMenu *menu, const char *label, TrayMenuCallback callback,
     void *user_data);
 
-/* Adds the radio item. */
+/* Adds a radio item. */
 int stray_menu_add_radio_item(
     TrayMenu *menu, const char *label, TrayMenuCallback callback,
     void *user_data);
 
-/* Sets the state for the checked item. */
+/* Sets the state for a checked item. */
 void stray_menu_set_item_checked(
     TrayMenu *menu, int item_id, dbus_bool_t checked);
 
 /* Sets the item state. */
 void stray_menu_set_item_enabled(
     TrayMenu *menu, int item_id, dbus_bool_t enabled);
+
+/* Sets a named icon for a menu item. */
+void stray_menu_set_item_icon(
+    TrayMenu *menu, int item_id, const char *icon_name);
 
 /* Adds a submenu to the main menu. */
 int stray_menu_add_submenu(
@@ -122,6 +126,7 @@ struct TrayMenuItem {
 
     int id;
     char *label;
+    char *icon_name;
     dbus_bool_t enabled;
     dbus_bool_t checked;
     void *user_data;
@@ -424,6 +429,12 @@ add_menu_item_properties(DBusMessageIter *props, TrayMenuItem *item) {
     visible = TRUE;
     add_dict_entry(props, "visible", DBUS_TYPE_BOOLEAN, "b", &visible);
 
+    /* add icon-name if present */
+    if (item->icon_name) {
+        add_dict_entry(
+            props, "icon-name", DBUS_TYPE_STRING, "s", &item->icon_name);
+    }
+
     /* add children-display property for items with submenus */
     if (item->submenu) {
         const char *children_display = "submenu";
@@ -438,6 +449,7 @@ add_menu_item_properties(DBusMessageIter *props, TrayMenuItem *item) {
 
         const char *toggle_type =
             (item->type == STRAY_MENU_ITEM_CHECK) ? "checkmark" : "radio";
+
         add_dict_entry(
             props, "toggle-type", DBUS_TYPE_STRING, "s", &toggle_type);
 
@@ -1303,6 +1315,7 @@ static TrayMenuItem *create_menu_item(
     item->callback = callback;
     item->user_data = user_data;
     item->submenu = NULL;
+    item->icon_name = NULL;
 
     if (label) {
         item->label = strdup(label);
@@ -1440,6 +1453,7 @@ void stray_menu_set_item_enabled(
     if (!menu) return;
 
     icon = get_root_icon(menu);
+
     if (icon) {
         item = find_menu_item_recursive(icon->menu, item_id);
     } else {
@@ -1489,6 +1503,37 @@ void stray_menu_set_item_label(TrayMenu *menu, int item_id, const char *label) {
     }
 }
 
+void stray_menu_set_item_icon(
+    TrayMenu *menu, int item_id, const char *icon_name) {
+    TrayMenuItem *item;
+    TrayIcon *icon;
+
+    if (!menu) return;
+
+    icon = get_root_icon(menu);
+
+    if (icon) {
+        item = find_menu_item_recursive(icon->menu, item_id);
+    } else {
+        item = find_menu_item(menu, item_id);
+    }
+
+    if (item) {
+        char *new_icon_name = icon_name ? strdup(icon_name) : NULL;
+
+        if (icon_name && !new_icon_name) return;
+
+        free(item->icon_name);
+        item->icon_name = new_icon_name;
+
+        if (icon) {
+            int ids[1];
+            ids[0] = item_id;
+            emit_menu_items_updated(icon, ids, 1);
+        }
+    }
+}
+
 void stray_set_menu(TrayIcon *icon, TrayMenu *menu) {
     if (!icon) return;
 
@@ -1513,6 +1558,7 @@ static void stray_menu_destroy_recursive(TrayMenu *menu) {
             }
 
             free(menu->items[i]->label);
+            free(menu->items[i]->icon_name);
             free(menu->items[i]);
         }
     }

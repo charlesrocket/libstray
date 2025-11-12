@@ -12,14 +12,13 @@ pub const ClickCallback = *const fn (user_data: ?*anyopaque) void;
 /// Menu callback function.
 pub const MenuCallback = *const fn (menu_id: i32, user_data: ?*anyopaque) void;
 
-/// Pixmap structure for ARGB32 icon data
+/// Pixmap structure for ARGB32 icon data.
 pub const Pixmap = extern struct {
     width: i32,
     height: i32,
     data: [*]u32, // ARGB32 format, each pixel is 32 bits
 
-    /// Creates a new pixmap from ARGB32 data
-    /// Returns a pointer that must be destroyed with destroy()
+    /// Creates a new pixmap from ARGB32 data.
     pub fn create(width: i32, height: i32, data: ?[]const u32) !*Pixmap {
         const data_ptr = if (data) |d|
             @as([*c]u32, @ptrCast(@constCast(d.ptr)))
@@ -172,8 +171,8 @@ pub const Icon = struct {
         );
     }
 
-    /// Sets the icon using pixmap data
-    /// The icon takes ownership of the pixmaps
+    /// Sets the icon using pixmap data.
+    /// The icon takes ownership of the pixmaps.
     pub fn setIconPixmap(
         self: *Icon,
         width: i32,
@@ -448,7 +447,14 @@ pub const Menu = struct {
         c.stray_menu_set_item_label(self.handle, item_id, label_z.ptr);
     }
 
-    /// Destroys the menu and all its resources
+    /// Sets a menu item's named icon.
+    pub fn setItemIcon(self: *Menu, item_id: i32, icon_name: []const u8) !void {
+        const icon_name_z = try self.allocator.dupeZ(u8, icon_name);
+        defer self.allocator.free(icon_name_z);
+        c.stray_menu_set_item_icon(self.handle, item_id, icon_name_z.ptr);
+    }
+
+    /// Destroys the menu and all its resources.
     pub fn destroy(self: *Menu) void {
         // the C library will handle the actual menu destruction
         // when the parent icon is destroyed
