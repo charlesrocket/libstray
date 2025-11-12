@@ -134,6 +134,7 @@ struct TrayMenu {
     int item_count;
     int item_capacity;
     int next_id;
+    dbus_uint32_t revision;
 };
 
 struct TrayIcon {
@@ -704,13 +705,12 @@ static DBusHandlerResult
 handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     DBusMessageIter args, root_struct, root_props, root_children;
     DBusMessage *reply;
-    dbus_uint32_t revision;
     dbus_int32_t parent_id;
     dbus_int32_t recursion_depth;
+    dbus_uint32_t revision;
     DBusMessageIter iter;
     const char *prop_value;
     TrayMenu *target_menu;
-    TrayMenuItem *parent_item;
 
     if (!icon || !icon->menu) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
@@ -722,10 +722,23 @@ handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     dbus_message_iter_next(&iter);
     dbus_message_iter_get_basic(&iter, &recursion_depth);
 
-    reply = dbus_message_new_method_return(msg);
-    if (!reply) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    /* determine which menu to show based on parent_id */
+    if (parent_id == 0) {
+        target_menu = icon->menu;
+    } else {
+        TrayMenuItem *parent_item =
+            find_menu_item_recursive(icon->menu, parent_id);
+        if (!parent_item || !parent_item->submenu) {
+            return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+        }
 
-    revision = 1;
+        target_menu = parent_item->submenu;
+    }
+
+    reply = dbus_message_new_method_return(msg);
+    revision = target_menu->revision;
+
+    if (!reply) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
     dbus_message_iter_init_append(reply, &args);
     dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, &revision);
@@ -743,18 +756,7 @@ handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     dbus_message_iter_open_container(
         &root_struct, DBUS_TYPE_ARRAY, "v", &root_children);
 
-    /* determine which menu to show based on parent_id */
-    if (parent_id == 0) {
-        /* root menu—show main menu items */
-        add_menu_items_recursive(&root_children, icon->menu);
-    } else {
-        /* find the item with this ID and show its submenu */
-        parent_item = find_menu_item_recursive(icon->menu, parent_id);
-
-        if (parent_item && parent_item->submenu) {
-            add_menu_items_recursive(&root_children, parent_item->submenu);
-        }
-    }
+    add_menu_items_recursive(&root_children, target_menu);
 
     dbus_message_iter_close_container(&root_struct, &root_children);
     dbus_message_iter_close_container(&args, &root_struct);
@@ -1254,6 +1256,7 @@ TrayMenu *stray_menu_create(void) {
         menu->items = calloc(menu->item_capacity, sizeof(TrayMenuItem *));
         menu->icon = NULL;
         menu->parent = NULL;
+        menu->revision = 1;
 
         for (i = 0; i < menu->item_capacity; i++) {
             menu->items[i] = NULL;
@@ -1327,6 +1330,7 @@ int stray_menu_add_item(
     item = create_menu_item(
         menu, label, STRAY_MENU_ITEM_NORMAL, callback, user_data);
 
+    menu->revision++;
     return item ? item->id : -1;
 }
 
@@ -1337,6 +1341,7 @@ int stray_menu_add_separator(TrayMenu *menu) {
 
     item = create_menu_item(menu, NULL, STRAY_MENU_ITEM_SEPARATOR, NULL, NULL);
 
+    menu->revision++;
     return item ? item->id : -1;
 }
 
@@ -1350,6 +1355,7 @@ int stray_menu_add_check_item(
     item = create_menu_item(
         menu, label, STRAY_MENU_ITEM_CHECK, callback, user_data);
 
+    menu->revision++;
     return item ? item->id : -1;
 }
 
@@ -1363,6 +1369,7 @@ int stray_menu_add_radio_item(
     item = create_menu_item(
         menu, label, STRAY_MENU_ITEM_RADIO, callback, user_data);
 
+    menu->revision++;
     return item ? item->id : -1;
 }
 
@@ -1384,6 +1391,7 @@ int stray_menu_add_submenu(
         if (icon) { emit_properties_changed(icon, "All"); }
     }
 
+    menu->revision++;
     return item->id;
 }
 
