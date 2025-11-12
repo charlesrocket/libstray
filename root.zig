@@ -30,20 +30,6 @@ pub const Pixmap = extern struct {
 
         return @ptrCast(@alignCast(c_pixmap));
     }
-
-    pub fn setIconPixmap(
-        self: *Icon,
-        width: i32,
-        height: i32,
-        data: []const u32,
-    ) !void {
-        c.stray_set_icon_pixmap_data(
-            self.handle,
-            width,
-            height,
-            @ptrCast(data.ptr),
-        );
-    }
 };
 
 const CallbackContext = struct {
