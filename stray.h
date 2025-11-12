@@ -313,6 +313,27 @@ static TrayIcon *get_root_icon(TrayMenu *menu) {
     return root->icon;
 }
 
+static void emit_layout_updated(TrayIcon *icon, dbus_int32_t parent_id) {
+    DBusMessage *msg;
+    dbus_uint32_t revision;
+
+    if (!icon || !icon->menu) return;
+
+    revision = icon->menu->revision;
+
+    msg = dbus_message_new_signal(
+        STRAY_MENU_OBJECT_PATH, STRAY_DBUSMENU_INTERFACE, "LayoutUpdated");
+
+    if (msg) {
+        DBusMessageIter args;
+        dbus_message_iter_init_append(msg, &args);
+        dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, &revision);
+        dbus_message_iter_append_basic(&args, DBUS_TYPE_INT32, &parent_id);
+        dbus_connection_send(icon->conn, msg, NULL);
+        dbus_message_unref(msg);
+    }
+}
+
 static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
     const char *interface;
     const char *current_icon;
@@ -1322,6 +1343,17 @@ static TrayMenuItem *create_menu_item(
     return item;
 }
 
+void signal_layout_update(TrayMenu *menu) {
+    if (menu->icon) {
+        TrayIcon *icon = get_root_icon(menu);
+
+        if (icon) {
+            icon->menu->revision++;
+            emit_layout_updated(icon, 0);
+        }
+    }
+}
+
 int stray_menu_add_item(
     TrayMenu *menu, const char *label, TrayMenuCallback callback,
     void *user_data) {
@@ -1332,7 +1364,7 @@ int stray_menu_add_item(
     item = create_menu_item(
         menu, label, STRAY_MENU_ITEM_NORMAL, callback, user_data);
 
-    menu->revision++;
+    signal_layout_update(menu);
     return item ? item->id : -1;
 }
 
@@ -1343,7 +1375,7 @@ int stray_menu_add_separator(TrayMenu *menu) {
 
     item = create_menu_item(menu, NULL, STRAY_MENU_ITEM_SEPARATOR, NULL, NULL);
 
-    menu->revision++;
+    signal_layout_update(menu);
     return item ? item->id : -1;
 }
 
@@ -1357,7 +1389,7 @@ int stray_menu_add_check_item(
     item = create_menu_item(
         menu, label, STRAY_MENU_ITEM_CHECK, callback, user_data);
 
-    menu->revision++;
+    signal_layout_update(menu);
     return item ? item->id : -1;
 }
 
@@ -1371,7 +1403,7 @@ int stray_menu_add_radio_item(
     item = create_menu_item(
         menu, label, STRAY_MENU_ITEM_RADIO, callback, user_data);
 
-    menu->revision++;
+    signal_layout_update(menu);
     return item ? item->id : -1;
 }
 
@@ -1393,7 +1425,7 @@ int stray_menu_add_submenu(
         if (icon) { emit_properties_changed(icon, "All"); }
     }
 
-    menu->revision++;
+    signal_layout_update(menu);
     return item->id;
 }
 
@@ -1488,6 +1520,8 @@ void stray_menu_set_item_label(TrayMenu *menu, int item_id, const char *label) {
             int ids[1];
             ids[0] = item_id;
             emit_menu_items_updated(icon, ids, 1);
+        } else {
+            signal_layout_update(menu);
         }
     }
 }
@@ -1519,6 +1553,8 @@ void stray_menu_set_item_icon(
             int ids[1];
             ids[0] = item_id;
             emit_menu_items_updated(icon, ids, 1);
+        } else {
+            signal_layout_update(menu);
         }
     }
 }
