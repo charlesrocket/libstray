@@ -6,8 +6,29 @@ pub const MenuItemType = enum(c_int) {
     radio = c.STRAY_MENU_ITEM_RADIO,
 };
 
-/// Click callback function.
+/// Mouse button types
+pub const Button = enum(c_int) {
+    left = c.STRAY_BUTTON_LEFT,
+    middle = c.STRAY_BUTTON_MIDDLE,
+    right = c.STRAY_BUTTON_RIGHT,
+};
+
+/// Scroll direction types
+pub const ScrollDirection = enum(c_int) {
+    up = c.STRAY_SCROLL_UP,
+    down = c.STRAY_SCROLL_DOWN,
+    left = c.STRAY_SCROLL_LEFT,
+    right = c.STRAY_SCROLL_RIGHT,
+};
+
+/// Click callback function (simple, button-agnostic).
 pub const ClickCallback = *const fn (user_data: ?*anyopaque) void;
+
+/// Button callback function.
+pub const ButtonCallback = *const fn (button: Button, user_data: ?*anyopaque) void;
+
+/// Scroll callback function.
+pub const ScrollCallback = *const fn (direction: ScrollDirection, delta: i32, user_data: ?*anyopaque) void;
 
 /// Menu callback function.
 pub const MenuCallback = *const fn (menu_id: i32, user_data: ?*anyopaque) void;
@@ -44,6 +65,16 @@ const CallbackContext = struct {
     user_data: ?*anyopaque,
 };
 
+const ButtonCallbackContext = struct {
+    callback: ButtonCallback,
+    user_data: ?*anyopaque,
+};
+
+const ScrollCallbackContext = struct {
+    callback: ScrollCallback,
+    user_data: ?*anyopaque,
+};
+
 const MenuCallbackContext = struct {
     callback: MenuCallback,
     user_data: ?*anyopaque,
@@ -54,6 +85,8 @@ pub const Icon = struct {
     handle: *c.TrayIcon,
     allocator: std.mem.Allocator,
     click_context: ?*CallbackContext = null,
+    button_context: ?*ButtonCallbackContext = null,
+    scroll_context: ?*ScrollCallbackContext = null,
     menu: ?*Menu = null,
     owned_pixmaps: std.array_list.Managed(*Pixmap),
 
@@ -104,7 +137,7 @@ pub const Icon = struct {
         c.stray_set_status(self.handle, @intFromEnum(status));
     }
 
-    /// Sets the click callback.
+    /// Sets the basic click callback.
     pub fn setClickCallback(
         self: *Icon,
         callback: ClickCallback,
@@ -126,6 +159,58 @@ pub const Icon = struct {
         self.click_context = ctx;
 
         c.stray_set_click_callback(self.handle, Wrapper.call, ctx);
+    }
+
+    /// Sets the button callback for left, middle, and right clicks.
+    pub fn setButtonCallback(
+        self: *Icon,
+        callback: ButtonCallback,
+        user_data: ?*anyopaque,
+    ) !void {
+        const Wrapper = struct {
+            fn call(button: c_uint, data: ?*anyopaque) callconv(.c) void {
+                const ctx = @as(*ButtonCallbackContext, @ptrCast(@alignCast(data.?)));
+                const btn = @as(Button, @enumFromInt(button));
+
+                ctx.callback(btn, ctx.user_data);
+            }
+        };
+
+        if (self.button_context) |old_ctx| {
+            self.allocator.destroy(old_ctx);
+        }
+
+        const ctx = try self.allocator.create(ButtonCallbackContext);
+        ctx.* = .{ .callback = callback, .user_data = user_data };
+        self.button_context = ctx;
+
+        c.stray_set_button_callback(self.handle, Wrapper.call, ctx);
+    }
+
+    /// Sets the scroll callback for scroll events.
+    pub fn setScrollCallback(
+        self: *Icon,
+        callback: ScrollCallback,
+        user_data: ?*anyopaque,
+    ) !void {
+        const Wrapper = struct {
+            fn call(direction: c_uint, delta: c_int, data: ?*anyopaque) callconv(.c) void {
+                const ctx = @as(*ScrollCallbackContext, @ptrCast(@alignCast(data.?)));
+                const dir = @as(ScrollDirection, @enumFromInt(direction));
+
+                ctx.callback(dir, delta, ctx.user_data);
+            }
+        };
+
+        if (self.scroll_context) |old_ctx| {
+            self.allocator.destroy(old_ctx);
+        }
+
+        const ctx = try self.allocator.create(ScrollCallbackContext);
+        ctx.* = .{ .callback = callback, .user_data = user_data };
+        self.scroll_context = ctx;
+
+        c.stray_set_scroll_callback(self.handle, Wrapper.call, ctx);
     }
 
     /// Processes pending events (non-blocking).
@@ -223,6 +308,16 @@ pub const Icon = struct {
             self.click_context = null;
         }
 
+        if (self.button_context) |ctx| {
+            self.allocator.destroy(ctx);
+            self.button_context = null;
+        }
+
+        if (self.scroll_context) |ctx| {
+            self.allocator.destroy(ctx);
+            self.scroll_context = null;
+        }
+
         self.owned_pixmaps.deinit();
 
         if (self.menu) |menu| {
@@ -249,9 +344,7 @@ pub const Menu = struct {
         return Menu{
             .handle = handle,
             .allocator = allocator,
-            .contexts = std.array_list.Managed(*MenuCallbackContext)
-                .init(allocator),
-
+            .contexts = std.array_list.Managed(*MenuCallbackContext).init(allocator),
             .owned_menus = std.array_list.Managed(*Menu).init(allocator),
         };
     }

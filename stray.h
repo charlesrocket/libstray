@@ -35,8 +35,26 @@ typedef struct {
     uint32_t *data; /* ARGB32 format, each pixel is 32 bits */
 } StrayPixmap;
 
-typedef void (*TrayClickCallback)(void *user_data);
-typedef void (*TrayMenuCallback)(int menu_id, void *user_data);
+/* Click button types */
+typedef enum {
+    STRAY_BUTTON_LEFT = 1,
+    STRAY_BUTTON_MIDDLE = 2,
+    STRAY_BUTTON_RIGHT = 3
+} TrayButton;
+
+/* Scroll direction */
+typedef enum {
+    STRAY_SCROLL_UP = 0,
+    STRAY_SCROLL_DOWN = 1,
+    STRAY_SCROLL_LEFT = 2,
+    STRAY_SCROLL_RIGHT = 3
+} TrayScrollDirection;
+
+/* Scroll orientation */
+typedef enum {
+    STRAY_ORIENTATION_VERTICAL = 0,
+    STRAY_ORIENTATION_HORIZONTAL = 1
+} TrayScrollOrientation;
 
 /* Menu item types */
 typedef enum {
@@ -52,6 +70,12 @@ typedef enum {
     STRAY_STATUS_NEEDS_ATTENTION = 2
 } TrayStatus;
 
+typedef void (*TrayMenuCallback)(int menu_id, void *user_data);
+typedef void (*TrayClickCallback)(void *user_data);
+typedef void (*TrayButtonCallback)(TrayButton button, void *user_data);
+typedef void (*TrayScrollCallback)(
+    TrayScrollDirection direction, int delta, void *user_data);
+
 /* Icon API */
 
 /* Creates the tray icon. */
@@ -59,9 +83,15 @@ TrayIcon *
 stray_create(const char *app_name, const char *icon_name, const char *title);
 /* Sets the icon status */
 void stray_set_status(TrayIcon *icon, TrayStatus status);
-/* Sets the click callback. */
+/* Sets the click callback (button-agnostic). */
 void stray_set_click_callback(
     TrayIcon *icon, TrayClickCallback callback, void *user_data);
+/* Sets the button callback for left, middle, and right clicks. */
+void stray_set_button_callback(
+    TrayIcon *icon, TrayButtonCallback callback, void *user_data);
+/* Sets the scroll callback. */
+void stray_set_scroll_callback(
+    TrayIcon *icon, TrayScrollCallback callback, void *user_data);
 
 /* Processes the events. */
 void stray_process_events(TrayIcon *icon);
@@ -156,8 +186,14 @@ struct TrayIcon {
 
     TrayStatus status;
     TrayMenu *menu;
+
     TrayClickCallback click_callback;
+    TrayButtonCallback button_callback;
+    TrayScrollCallback scroll_callback;
+
     void *user_data;
+    void *button_user_data;
+    void *scroll_user_data;
 
     StrayPixmap *icon_pixmaps;
     int icon_pixmap_count;
@@ -990,16 +1026,66 @@ message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
         }
     }
 
-    /* handle Activate method (left-click) */
+    /* handle StatusNotifierItem interface methods */
     if (strcmp(interface, STRAY_INTERFACE_NAME) == 0) {
         DBusMessage *reply = NULL;
 
         if (strcmp(member, "Activate") == 0) {
-            if (icon->click_callback) icon->click_callback(icon->user_data);
+            /* left click */
+            if (icon->button_callback) {
+                icon->button_callback(
+                    STRAY_BUTTON_LEFT, icon->button_user_data);
+            } else if (icon->click_callback) {
+                /* fallback to simple callback */
+                icon->click_callback(icon->user_data);
+            }
+
             reply = dbus_message_new_method_return(msg);
-        } else if (
-            strcmp(member, "ContextMenu") == 0 ||
-            strcmp(member, "NewIcon") == 0) {
+        } else if (strcmp(member, "SecondaryActivate") == 0) {
+            /* middle click */
+            if (icon->button_callback) {
+                icon->button_callback(
+                    STRAY_BUTTON_MIDDLE, icon->button_user_data);
+            }
+
+            reply = dbus_message_new_method_return(msg);
+        } else if (strcmp(member, "ContextMenu") == 0) {
+            /* right click (typically handled by the menu system) */
+            if (icon->button_callback) {
+                icon->button_callback(
+                    STRAY_BUTTON_RIGHT, icon->button_user_data);
+            }
+
+            reply = dbus_message_new_method_return(msg);
+        } else if (strcmp(member, "Scroll") == 0) {
+            /* scroll event */
+            DBusMessageIter iter;
+            dbus_int32_t delta;
+            const char *orientation;
+
+            if (dbus_message_iter_init(msg, &iter)) {
+                dbus_message_iter_get_basic(&iter, &delta);
+                dbus_message_iter_next(&iter);
+                dbus_message_iter_get_basic(&iter, &orientation);
+
+                if (icon->scroll_callback) {
+                    TrayScrollDirection direction;
+
+                    if (strcmp(orientation, "vertical") == 0) {
+                        direction =
+                            (delta > 0) ? STRAY_SCROLL_UP : STRAY_SCROLL_DOWN;
+                    } else {
+                        direction = (delta > 0) ? STRAY_SCROLL_RIGHT
+                                                : STRAY_SCROLL_LEFT;
+                    }
+
+                    icon->scroll_callback(
+                        direction, abs(delta), icon->scroll_user_data);
+                }
+            }
+
+            reply = dbus_message_new_method_return(msg);
+        } else if (strcmp(member, "NewIcon") == 0) {
             reply = dbus_message_new_method_return(msg);
         }
 
@@ -1136,6 +1222,12 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
     icon->tooltip_title = NULL;
     icon->tooltip_text = NULL;
     icon->menu = NULL;
+    icon->click_callback = NULL;
+    icon->button_callback = NULL;
+    icon->scroll_callback = NULL;
+    icon->user_data = NULL;
+    icon->button_user_data = NULL;
+    icon->scroll_user_data = NULL;
     icon->icon_pixmaps = NULL;
     icon->icon_pixmap_count = 0;
 
@@ -1189,6 +1281,22 @@ void stray_set_click_callback(
     if (icon) {
         icon->click_callback = callback;
         icon->user_data = user_data;
+    }
+}
+
+void stray_set_button_callback(
+    TrayIcon *icon, TrayButtonCallback callback, void *user_data) {
+    if (icon) {
+        icon->button_callback = callback;
+        icon->button_user_data = user_data;
+    }
+}
+
+void stray_set_scroll_callback(
+    TrayIcon *icon, TrayScrollCallback callback, void *user_data) {
+    if (icon) {
+        icon->scroll_callback = callback;
+        icon->scroll_user_data = user_data;
     }
 }
 
