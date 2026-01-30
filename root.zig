@@ -88,7 +88,7 @@ pub const Icon = struct {
     button_context: ?*ButtonCallbackContext = null,
     scroll_context: ?*ScrollCallbackContext = null,
     menu: ?*Menu = null,
-    owned_pixmaps: std.array_list.Managed(*Pixmap),
+    owned_pixmaps: std.ArrayList(*Pixmap),
 
     /// Creates a new tray icon.
     pub fn create(
@@ -121,7 +121,7 @@ pub const Icon = struct {
         return Icon{
             .handle = handle,
             .allocator = allocator,
-            .owned_pixmaps = std.array_list.Managed(*Pixmap).init(allocator),
+            .owned_pixmaps = std.ArrayList(*Pixmap).empty,
         };
     }
 
@@ -318,7 +318,7 @@ pub const Icon = struct {
             self.scroll_context = null;
         }
 
-        self.owned_pixmaps.deinit();
+        self.owned_pixmaps.deinit(self.allocator);
 
         if (self.menu) |menu| {
             menu.destroy();
@@ -333,8 +333,8 @@ pub const Icon = struct {
 pub const Menu = struct {
     handle: ?*c.TrayMenu,
     allocator: std.mem.Allocator,
-    contexts: std.array_list.Managed(*MenuCallbackContext),
-    owned_menus: std.array_list.Managed(*Menu), // track submenus for cleanup
+    contexts: std.ArrayList(*MenuCallbackContext),
+    owned_menus: std.ArrayList(*Menu), // track submenus for cleanup
 
     /// Creates a new menu.
     pub fn create(allocator: std.mem.Allocator) !Menu {
@@ -344,8 +344,8 @@ pub const Menu = struct {
         return Menu{
             .handle = handle,
             .allocator = allocator,
-            .contexts = std.array_list.Managed(*MenuCallbackContext).init(allocator),
-            .owned_menus = std.array_list.Managed(*Menu).init(allocator),
+            .contexts = std.ArrayList(*MenuCallbackContext).empty,
+            .owned_menus = std.ArrayList(*Menu).empty,
         };
     }
 
@@ -374,7 +374,7 @@ pub const Menu = struct {
         errdefer self.allocator.destroy(ctx);
 
         ctx.* = .{ .callback = callback, .user_data = user_data };
-        try self.contexts.append(ctx);
+        try self.contexts.append(self.allocator, ctx);
 
         const id = c.stray_menu_add_item(
             self.handle,
@@ -423,7 +423,7 @@ pub const Menu = struct {
         errdefer self.allocator.destroy(ctx);
 
         ctx.* = .{ .callback = callback, .user_data = user_data };
-        try self.contexts.append(ctx);
+        try self.contexts.append(self.allocator, ctx);
 
         const id = c.stray_menu_add_check_item(
             self.handle,
@@ -465,7 +465,7 @@ pub const Menu = struct {
         errdefer self.allocator.destroy(ctx);
 
         ctx.* = .{ .callback = callback, .user_data = user_data };
-        try self.contexts.append(ctx);
+        try self.contexts.append(self.allocator, ctx);
 
         const id = c.stray_menu_add_radio_item(
             self.handle,
@@ -502,7 +502,7 @@ pub const Menu = struct {
         if (id < 0) return error.AddSubmenuFailed;
 
         // track the submenu for cleanup
-        try self.owned_menus.append(submenu);
+        try self.owned_menus.append(self.allocator, submenu);
 
         return id;
     }
@@ -554,13 +554,13 @@ pub const Menu = struct {
             self.allocator.destroy(ctx);
         }
 
-        self.contexts.deinit();
+        self.contexts.deinit(self.allocator);
 
         for (self.owned_menus.items) |submenu| {
             submenu.destroy();
         }
 
-        self.owned_menus.deinit();
+        self.owned_menus.deinit(self.allocator);
     }
 };
 
