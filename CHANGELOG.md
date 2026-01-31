@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-01-30
+
+### Bug Fixes
+
+- Resolve recursive submenu
+- Implement menu revision
+- Clean up redundancies
+- Signal updated layout
+- Drop redundant `setIconPixmap()`
+- Signal new status
+- Adjust demo status signal
+
+### Features
+
+- Add submenu support
+- Add menu icons
+- Implement icon statuses
+- Add button/scroll callback
+
+### Operations
+
+- Bump actions/checkout from 5 to 6
+
+### Refactor
+
+- Switch to `ArrayList`
+
+### Testing
+
+- Add submenu
+- Add icons
+
 ## [0.2.0] - 2025-11-10
 
 ### Bug Fixes
