@@ -177,7 +177,6 @@ struct TrayMenu {
 };
 
 struct TrayIcon {
-    DBusConnection *conn;
     char *service_name;
     char *icon_name;
     char *title;
@@ -195,8 +194,11 @@ struct TrayIcon {
     void *button_user_data;
     void *scroll_user_data;
 
-    StrayPixmap *icon_pixmaps;
+    int registered;
     int icon_pixmap_count;
+
+    StrayPixmap *icon_pixmaps;
+    DBusConnection *conn;
 };
 
 /* helper functions */
@@ -1299,6 +1301,7 @@ int stray_register(TrayIcon *icon) {
     DBusError err;
 
     if (!icon) return 0;
+    if (icon->registered) return 1;
 
     dbus_error_init(&err);
     dbus_bus_add_match(
@@ -1312,15 +1315,29 @@ int stray_register(TrayIcon *icon) {
     if (dbus_error_is_set(&err)) {
         fprintf(stderr, "D-Bus match error: %s\n", err.message);
         dbus_error_free(&err);
+        return 0;
     }
 
     dbus_connection_add_filter(icon->conn, connection_filter, icon, NULL);
+
     emit_properties_changed(icon, "All");
     process_events_with_timeout(icon->conn, 100);
 
-    if (!register_with_watcher(icon->conn, icon->service_name)) { return 0; }
+    if (!register_with_watcher(icon->conn, icon->service_name)) {
+        dbus_connection_remove_filter(icon->conn, connection_filter, icon);
+        dbus_bus_remove_match(
+            icon->conn,
+            "type='signal',"
+            "interface='org.freedesktop.DBus',"
+            "member='NameOwnerChanged',"
+            "arg0='" STRAY_WATCHER_SERVICE "'",
+            NULL);
+
+        return 0;
+    }
 
     process_events_with_timeout(icon->conn, 100);
+    icon->registered = 1;
     return 1;
 }
 
@@ -1786,6 +1803,19 @@ static void stray_menu_destroy(TrayMenu *menu) {
 
 void stray_destroy(TrayIcon *icon) {
     if (!icon) return;
+
+    if (icon->registered) {
+        dbus_connection_remove_filter(icon->conn, connection_filter, icon);
+        dbus_bus_remove_match(
+            icon->conn,
+            "type='signal',"
+            "interface='org.freedesktop.DBus',"
+            "member='NameOwnerChanged',"
+            "arg0='" STRAY_WATCHER_SERVICE "'",
+            NULL);
+
+        icon->registered = 0;
+    }
 
     /* clear the pixmap */
     stray_clear_icon_pixmap(icon);
