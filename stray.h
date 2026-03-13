@@ -788,6 +788,34 @@ add_menu_items_recursive(DBusMessageIter *parent_children, TrayMenu *menu) {
     }
 }
 
+static int
+register_with_watcher(DBusConnection *conn, const char *service_name) {
+    DBusError err;
+    DBusMessage *reply;
+    DBusMessage *msg = dbus_message_new_method_call(
+        STRAY_WATCHER_SERVICE, STRAY_WATCHER_PATH, STRAY_WATCHER_SERVICE,
+        "RegisterStatusNotifierItem");
+
+    if (!msg) return 0;
+
+    dbus_message_append_args(
+        msg, DBUS_TYPE_STRING, &service_name, DBUS_TYPE_INVALID);
+
+    dbus_error_init(&err);
+    reply = dbus_connection_send_with_reply_and_block(conn, msg, 5000, &err);
+    dbus_message_unref(msg);
+
+    if (dbus_error_is_set(&err)) {
+        fprintf(stderr, "D-Bus: %s\n", err.message);
+        dbus_error_free(&err);
+        return 0;
+    }
+
+    if (reply) dbus_message_unref(reply);
+
+    return 1;
+}
+
 static DBusHandlerResult
 handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     DBusMessageIter args, root_struct, root_props, root_children;
@@ -815,6 +843,7 @@ handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     } else {
         TrayMenuItem *parent_item =
             find_menu_item_recursive(icon->menu, parent_id);
+
         if (!parent_item || !parent_item->submenu) {
             return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
         }
@@ -958,6 +987,7 @@ menu_message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
 
     if (strcmp(member, "AboutToShow") == 0) {
         DBusMessage *reply = dbus_message_new_method_return(msg);
+
         if (reply) {
             dbus_bool_t need_update = TRUE;
             DBusMessageIter args;
@@ -967,11 +997,13 @@ menu_message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
             dbus_connection_send(conn, reply, NULL);
             dbus_message_unref(reply);
         }
+
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
     if (strcmp(member, "AboutToShowGroup") == 0) {
         DBusMessage *reply = dbus_message_new_method_return(msg);
+
         if (reply) {
             dbus_bool_t need_update = FALSE;
             DBusMessageIter args, empty_array;
@@ -990,6 +1022,7 @@ menu_message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
             dbus_connection_send(conn, reply, NULL);
             dbus_message_unref(reply);
         }
+
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
@@ -1097,34 +1130,6 @@ message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
     }
 
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-}
-
-static int
-register_with_watcher(DBusConnection *conn, const char *service_name) {
-    DBusError err;
-    DBusMessage *reply;
-    DBusMessage *msg = dbus_message_new_method_call(
-        STRAY_WATCHER_SERVICE, STRAY_WATCHER_PATH, STRAY_WATCHER_SERVICE,
-        "RegisterStatusNotifierItem");
-
-    if (!msg) return 0;
-
-    dbus_message_append_args(
-        msg, DBUS_TYPE_STRING, &service_name, DBUS_TYPE_INVALID);
-
-    dbus_error_init(&err);
-    reply = dbus_connection_send_with_reply_and_block(conn, msg, 5000, &err);
-    dbus_message_unref(msg);
-
-    if (dbus_error_is_set(&err)) {
-        fprintf(stderr, "D-Bus: %s\n", err.message);
-
-        dbus_error_free(&err);
-        return 0;
-    }
-
-    if (reply) dbus_message_unref(reply);
-    return 1;
 }
 
 static void process_events_with_timeout(DBusConnection *conn, int timeout_ms) {
@@ -1264,9 +1269,52 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
     return icon;
 }
 
+static DBusHandlerResult
+connection_filter(DBusConnection *conn, DBusMessage *msg, void *data) {
+    TrayIcon *icon = (TrayIcon *)data;
+    const char *interface = dbus_message_get_interface(msg);
+    const char *member = dbus_message_get_member(msg);
+
+    if (!interface || !member) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+
+    if (strcmp(interface, "org.freedesktop.DBus") == 0 &&
+        strcmp(member, "NameOwnerChanged") == 0) {
+        const char *name = NULL, *old_owner = NULL, *new_owner = NULL;
+        dbus_message_get_args(
+            msg, NULL, DBUS_TYPE_STRING, &name, DBUS_TYPE_STRING, &old_owner,
+            DBUS_TYPE_STRING, &new_owner, DBUS_TYPE_INVALID);
+
+        if (name && strcmp(name, STRAY_WATCHER_SERVICE) == 0 && new_owner &&
+            strlen(new_owner) > 0) {
+            emit_properties_changed(icon, "All");
+            register_with_watcher(icon->conn, icon->service_name);
+        }
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
 int stray_register(TrayIcon *icon) {
+    DBusError err;
+
     if (!icon) return 0;
 
+    dbus_error_init(&err);
+    dbus_bus_add_match(
+        icon->conn,
+        "type='signal',"
+        "interface='org.freedesktop.DBus',"
+        "member='NameOwnerChanged',"
+        "arg0='" STRAY_WATCHER_SERVICE "'",
+        &err);
+
+    if (dbus_error_is_set(&err)) {
+        fprintf(stderr, "D-Bus match error: %s\n", err.message);
+        dbus_error_free(&err);
+    }
+
+    dbus_connection_add_filter(icon->conn, connection_filter, icon, NULL);
     emit_properties_changed(icon, "All");
     process_events_with_timeout(icon->conn, 100);
 
@@ -1274,6 +1322,24 @@ int stray_register(TrayIcon *icon) {
 
     process_events_with_timeout(icon->conn, 100);
     return 1;
+}
+
+static void stray_clear_icon_pixmap(TrayIcon *icon) {
+    if (!icon) return;
+
+    /* clear existing pixmap data */
+    if (icon->icon_pixmaps) {
+        int i;
+        for (i = 0; i < icon->icon_pixmap_count; i++) {
+            free(icon->icon_pixmaps[i].data);
+        }
+        free(icon->icon_pixmaps);
+        icon->icon_pixmaps = NULL;
+        icon->icon_pixmap_count = 0;
+    }
+
+    emit_signal(icon, "NewIcon");
+    emit_properties_changed(icon, "IconPixmap");
 }
 
 void stray_set_click_callback(
@@ -1354,6 +1420,8 @@ void stray_set_icon_pixmap(
     TrayIcon *icon, int width, int height, const uint32_t *data) {
     if (!icon) return;
 
+    stray_clear_icon_pixmap(icon);
+
     if (data && width > 0 && height > 0) {
         size_t data_size;
 
@@ -1365,6 +1433,7 @@ void stray_set_icon_pixmap(
 
         data_size = width * height * sizeof(uint32_t);
         icon->icon_pixmaps[0].data = malloc(data_size);
+
         if (icon->icon_pixmaps[0].data) {
             memcpy(icon->icon_pixmaps[0].data, data, data_size);
             icon->icon_pixmap_count = 1;
@@ -1374,24 +1443,6 @@ void stray_set_icon_pixmap(
             icon->icon_pixmap_count = 0;
             return;
         }
-    }
-
-    emit_signal(icon, "NewIcon");
-    emit_properties_changed(icon, "IconPixmap");
-}
-
-static void stray_clear_icon_pixmap(TrayIcon *icon) {
-    if (!icon) return;
-
-    /* clear existing pixmap data */
-    if (icon->icon_pixmaps) {
-        int i;
-        for (i = 0; i < icon->icon_pixmap_count; i++) {
-            free(icon->icon_pixmaps[i].data);
-        }
-        free(icon->icon_pixmaps);
-        icon->icon_pixmaps = NULL;
-        icon->icon_pixmap_count = 0;
     }
 
     emit_signal(icon, "NewIcon");
