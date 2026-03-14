@@ -2,7 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.3.0] - 2026-01-30
+## [0.3.1] - 2026-03-14
+
+### Bug Fixes
+
+- Add connection filter
+- Track registrations
+
+## [0.3.0] - 2026-01-31
 
 ### Bug Fixes
 
