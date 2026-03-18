@@ -1535,7 +1535,35 @@ void stray_set_status(TrayIcon *icon, TrayStatus status) {
 
     if (icon->status != status) {
         icon->status = status;
-        emit_signal(icon, "NewStatus");
+
+        const char *status_str;
+        switch (status) {
+            case STRAY_STATUS_PASSIVE:
+                status_str = "Passive";
+                break;
+            case STRAY_STATUS_ACTIVE:
+                status_str = "Active";
+                break;
+            case STRAY_STATUS_NEEDS_ATTENTION:
+                status_str = "NeedsAttention";
+                break;
+            default:
+                status_str = "Active";
+                break;
+        }
+
+        DBusMessage *msg = dbus_message_new_signal(
+            STRAY_OBJECT_PATH, STRAY_INTERFACE_NAME, "NewStatus");
+
+        if (msg) {
+            DBusMessageIter args;
+            dbus_message_iter_init_append(msg, &args);
+            dbus_message_iter_append_basic(
+                &args, DBUS_TYPE_STRING, &status_str);
+            dbus_connection_send(icon->conn, msg, NULL);
+            dbus_message_unref(msg);
+        }
+
         emit_properties_changed(icon, "Status");
     }
 }
