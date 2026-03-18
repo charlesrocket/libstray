@@ -104,7 +104,7 @@ pub fn main() !void {
     );
 
     // create a custom pixmap icon
-    const custom_icon = try createCustomIcon(allocator, 0xA020F0);
+    const custom_icon = try createCustomIcon(allocator, 0xFFA020F0);
     defer allocator.free(custom_icon);
 
     // main event loop
