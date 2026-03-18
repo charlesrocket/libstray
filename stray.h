@@ -795,6 +795,21 @@ add_menu_items_recursive(DBusMessageIter *parent_children, TrayMenu *menu) {
     }
 }
 
+static int watcher_exists(DBusConnection *conn) {
+    DBusError err;
+    int exists;
+
+    dbus_error_init(&err);
+    exists = dbus_bus_name_has_owner(conn, STRAY_WATCHER_SERVICE, &err);
+
+    if (dbus_error_is_set(&err)) {
+        dbus_error_free(&err);
+        return 0;
+    }
+
+    return exists;
+}
+
 static int
 register_with_watcher(DBusConnection *conn, const char *service_name) {
     DBusError err;
@@ -1331,8 +1346,10 @@ connection_filter(DBusConnection *conn, DBusMessage *msg, void *data) {
 
         if (name && strcmp(name, STRAY_WATCHER_SERVICE) == 0 && new_owner &&
             strlen(new_owner) > 0) {
+            if (register_with_watcher(icon->conn, icon->service_name))
+                icon->registered = 1;
+
             emit_properties_changed(icon, "All");
-            register_with_watcher(icon->conn, icon->service_name);
         }
 
         return DBUS_HANDLER_RESULT_HANDLED;
@@ -1363,6 +1380,8 @@ int stray_register(TrayIcon *icon) {
     }
 
     dbus_connection_add_filter(icon->conn, connection_filter, icon, NULL);
+
+    if (!watcher_exists(icon->conn)) return 0;
 
     emit_properties_changed(icon, "All");
     process_events_with_timeout(icon->conn, 100);
@@ -1891,6 +1910,9 @@ void stray_destroy(TrayIcon *icon) {
             "arg0='" STRAY_WATCHER_SERVICE "'",
             NULL);
 
+        dbus_bus_release_name(icon->conn, icon->service_name, NULL);
+        dbus_connection_flush(icon->conn);
+        process_events_with_timeout(icon->conn, 200);
         icon->registered = 0;
     }
 
