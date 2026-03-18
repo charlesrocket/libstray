@@ -7,6 +7,7 @@
 extern "C" {
 #endif
 
+#include <arpa/inet.h>
 #include <dbus/dbus.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -1491,7 +1492,10 @@ void stray_set_icon_pixmap(
         icon->icon_pixmaps[0].data = malloc(data_size);
 
         if (icon->icon_pixmaps[0].data) {
-            memcpy(icon->icon_pixmaps[0].data, data, data_size);
+            size_t i, pixel_count = (size_t)width * height;
+            for (i = 0; i < pixel_count; i++)
+                icon->icon_pixmaps[0].data[i] = htonl(data[i]);
+
             icon->icon_pixmap_count = 1;
         } else {
             free(icon->icon_pixmaps);
