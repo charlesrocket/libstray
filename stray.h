@@ -1030,9 +1030,11 @@ menu_message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
         if (reply) {
             dbus_bool_t need_update = TRUE;
             DBusMessageIter args;
+
             dbus_message_iter_init_append(reply, &args);
             dbus_message_iter_append_basic(
                 &args, DBUS_TYPE_BOOLEAN, &need_update);
+
             dbus_connection_send(conn, reply, NULL);
             dbus_message_unref(reply);
         }
@@ -1044,20 +1046,17 @@ menu_message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
         DBusMessage *reply = dbus_message_new_method_return(msg);
 
         if (reply) {
-            dbus_bool_t need_update = FALSE;
-            DBusMessageIter args, empty_array;
+            DBusMessageIter args, updates_array, errors_array;
+
             dbus_message_iter_init_append(reply, &args);
-            dbus_message_iter_append_basic(
-                &args, DBUS_TYPE_BOOLEAN, &need_update);
-
             dbus_message_iter_open_container(
-                &args, DBUS_TYPE_ARRAY, "u", &empty_array);
+                &args, DBUS_TYPE_ARRAY, "i", &updates_array);
 
-            dbus_message_iter_close_container(&args, &empty_array);
+            dbus_message_iter_close_container(&args, &updates_array);
             dbus_message_iter_open_container(
-                &args, DBUS_TYPE_ARRAY, "u", &empty_array);
+                &args, DBUS_TYPE_ARRAY, "i", &errors_array);
 
-            dbus_message_iter_close_container(&args, &empty_array);
+            dbus_message_iter_close_container(&args, &errors_array);
             dbus_connection_send(conn, reply, NULL);
             dbus_message_unref(reply);
         }
