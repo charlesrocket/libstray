@@ -313,6 +313,7 @@ static void emit_signal(TrayIcon *icon, const char *signal_name) {
 
     if (msg) {
         dbus_connection_send(icon->conn, msg, NULL);
+        dbus_connection_flush(icon->conn);
         dbus_message_unref(msg);
     }
 }
@@ -382,6 +383,7 @@ static void emit_layout_updated(TrayIcon *icon, dbus_int32_t parent_id) {
         dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, &revision);
         dbus_message_iter_append_basic(&args, DBUS_TYPE_INT32, &parent_id);
         dbus_connection_send(icon->conn, msg, NULL);
+        dbus_connection_flush(icon->conn);
         dbus_message_unref(msg);
     }
 }
@@ -478,6 +480,7 @@ static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
 
     dbus_message_iter_close_container(&args, &invalidated_props);
     dbus_connection_send(icon->conn, msg, NULL);
+    dbus_connection_flush(icon->conn);
     dbus_message_unref(msg);
 }
 
@@ -680,6 +683,7 @@ static void handle_property_get_all(
     dbus_message_iter_close_container(&array, &dict_entry);
     dbus_message_iter_close_container(&args, &array);
     dbus_connection_send(conn, reply, NULL);
+    dbus_connection_flush(conn);
     dbus_message_unref(reply);
 }
 
@@ -755,6 +759,7 @@ static void handle_property_get(
     }
 
     dbus_connection_send(conn, reply, NULL);
+    dbus_connection_flush(conn);
     dbus_message_unref(reply);
 }
 
@@ -902,6 +907,7 @@ handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     dbus_message_iter_close_container(&root_struct, &root_children);
     dbus_message_iter_close_container(&args, &root_struct);
     dbus_connection_send(conn, reply, NULL);
+    dbus_connection_flush(conn);
     dbus_message_unref(reply);
 
     return DBUS_HANDLER_RESULT_HANDLED;
@@ -935,6 +941,7 @@ handle_menu_event(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
 
     if (reply) {
         dbus_connection_send(conn, reply, NULL);
+        dbus_connection_flush(conn);
         dbus_message_unref(reply);
     }
 
@@ -992,6 +999,7 @@ static DBusHandlerResult handle_menu_get_group_properties(
 
     dbus_message_iter_close_container(&args, &props_array);
     dbus_connection_send(conn, reply, NULL);
+    dbus_connection_flush(conn);
     dbus_message_unref(reply);
     return DBUS_HANDLER_RESULT_HANDLED;
 }
@@ -1016,8 +1024,10 @@ menu_message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
                 dbus_message_iter_init_append(reply, &args);
                 dbus_message_iter_open_container(
                     &args, DBUS_TYPE_ARRAY, "{sv}", &empty_array);
+
                 dbus_message_iter_close_container(&args, &empty_array);
                 dbus_connection_send(conn, reply, NULL);
+                dbus_connection_flush(conn);
                 dbus_message_unref(reply);
             }
 
@@ -1031,6 +1041,7 @@ menu_message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
 
             if (error) {
                 dbus_connection_send(conn, error, NULL);
+                dbus_connection_flush(conn);
                 dbus_message_unref(error);
             }
 
@@ -1058,6 +1069,7 @@ menu_message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
                 &args, DBUS_TYPE_BOOLEAN, &need_update);
 
             dbus_connection_send(conn, reply, NULL);
+            dbus_connection_flush(conn);
             dbus_message_unref(reply);
         }
 
@@ -1080,6 +1092,7 @@ menu_message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
 
             dbus_message_iter_close_container(&args, &errors_array);
             dbus_connection_send(conn, reply, NULL);
+            dbus_connection_flush(conn);
             dbus_message_unref(reply);
         }
 
@@ -1185,6 +1198,7 @@ message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
 
         if (reply) {
             dbus_connection_send(conn, reply, NULL);
+            dbus_connection_flush(conn);
             dbus_message_unref(reply);
             return DBUS_HANDLER_RESULT_HANDLED;
         }
@@ -1247,6 +1261,7 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
     if (dbus_error_is_set(&err)) {
         fprintf(
             stderr, "Error: failed to get DBus connection: %s\n", err.message);
+
         dbus_error_free(&err);
         return NULL;
     }
@@ -1261,6 +1276,7 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
     if (dbus_error_is_set(&err)) {
         fprintf(
             stderr, "Error: failed to request DBus name: %s\n", err.message);
+
         dbus_error_free(&err);
         dbus_connection_unref(conn);
         return NULL;
@@ -1342,6 +1358,7 @@ connection_filter(DBusConnection *conn, DBusMessage *msg, void *data) {
     if (strcmp(interface, "org.freedesktop.DBus") == 0 &&
         strcmp(member, "NameOwnerChanged") == 0) {
         const char *name = NULL, *old_owner = NULL, *new_owner = NULL;
+
         dbus_message_get_args(
             msg, NULL, DBUS_TYPE_STRING, &name, DBUS_TYPE_STRING, &old_owner,
             DBUS_TYPE_STRING, &new_owner, DBUS_TYPE_INVALID);
@@ -1586,6 +1603,7 @@ void stray_set_status(TrayIcon *icon, TrayStatus status) {
             dbus_message_iter_init_append(msg, &args);
             dbus_message_iter_append_basic(
                 &args, DBUS_TYPE_STRING, &status_str);
+
             dbus_connection_send(icon->conn, msg, NULL);
             dbus_message_unref(msg);
         }
