@@ -149,6 +149,7 @@ void stray_menu_set_item_icon(
 /* Adds a submenu to the main menu. */
 int stray_menu_add_submenu(
     TrayMenu *menu, const char *label, TrayMenu *submenu);
+
 TrayMenu *stray_menu_get_submenu(TrayMenu *menu, int item_id);
 
 #ifdef STRAY_IMPL
@@ -265,7 +266,9 @@ static void add_pixmap_array(DBusMessageIter *variant, TrayIcon *icon) {
             if (pixmap->data) {
                 /* convert ARGB32 data to byte array */
                 size_t data_size =
-                    pixmap->width * pixmap->height * 4; /* 4 bytes per pixel */
+                    /* 4 bytes per pixel */
+                    pixmap->width * pixmap->height * 4;
+
                 const uint8_t *byte_data = (const uint8_t *)pixmap->data;
                 dbus_message_iter_append_fixed_array(
                     &data_array, DBUS_TYPE_BYTE, &byte_data, data_size);
@@ -397,6 +400,7 @@ static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
     msg = dbus_message_new_signal(
         STRAY_OBJECT_PATH, "org.freedesktop.DBus.Properties",
         "PropertiesChanged");
+
     if (!msg) return;
 
     interface = STRAY_INTERFACE_NAME;
@@ -518,6 +522,7 @@ add_menu_item_properties(DBusMessageIter *props, TrayMenuItem *item) {
             props, "toggle-type", DBUS_TYPE_STRING, "s", &toggle_type);
 
         toggle_state = item->checked ? 1 : 0;
+
         add_dict_entry(
             props, "toggle-state", DBUS_TYPE_INT32, "i", &toggle_state);
     }
@@ -671,7 +676,6 @@ static void handle_property_get_all(
     add_tooltip_struct(&variant, icon);
     dbus_message_iter_close_container(&dict_entry, &variant);
     dbus_message_iter_close_container(&array, &dict_entry);
-
     dbus_message_iter_close_container(&args, &array);
     dbus_connection_send(conn, reply, NULL);
     dbus_message_unref(reply);
@@ -862,6 +866,7 @@ handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, &revision);
     dbus_message_iter_open_container(
         &args, DBUS_TYPE_STRUCT, NULL, &root_struct);
+
     dbus_message_iter_append_basic(&root_struct, DBUS_TYPE_INT32, &parent_id);
     dbus_message_iter_open_container(
         &root_struct, DBUS_TYPE_ARRAY, "{sv}", &root_props);
@@ -979,6 +984,37 @@ menu_message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
     interface = dbus_message_get_interface(msg);
     member = dbus_message_get_member(msg);
 
+    if (interface &&
+        strcmp(interface, "org.freedesktop.DBus.Properties") == 0) {
+        if (strcmp(member, "GetAll") == 0) {
+            DBusMessage *reply = dbus_message_new_method_return(msg);
+            if (reply) {
+                DBusMessageIter args, empty_array;
+                dbus_message_iter_init_append(reply, &args);
+                dbus_message_iter_open_container(
+                    &args, DBUS_TYPE_ARRAY, "{sv}", &empty_array);
+                dbus_message_iter_close_container(&args, &empty_array);
+                dbus_connection_send(conn, reply, NULL);
+                dbus_message_unref(reply);
+            }
+
+            return DBUS_HANDLER_RESULT_HANDLED;
+        }
+
+        if (strcmp(member, "Get") == 0) {
+            DBusMessage *error = dbus_message_new_error(
+                msg, "org.freedesktop.DBus.Error.UnknownProperty",
+                "No properties on this interface");
+
+            if (error) {
+                dbus_connection_send(conn, error, NULL);
+                dbus_message_unref(error);
+            }
+
+            return DBUS_HANDLER_RESULT_HANDLED;
+        }
+    }
+
     if (!interface || strcmp(interface, STRAY_DBUSMENU_INTERFACE) != 0)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
@@ -1045,6 +1081,7 @@ message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
     member = dbus_message_get_member(msg);
 
     if (!interface || !member) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+
     /* handle property requests */
     if (strcmp(interface, "org.freedesktop.DBus.Properties") == 0) {
         if (strcmp(member, "GetAll") == 0) {
@@ -1291,6 +1328,7 @@ connection_filter(DBusConnection *conn, DBusMessage *msg, void *data) {
             emit_properties_changed(icon, "All");
             register_with_watcher(icon->conn, icon->service_name);
         }
+
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
@@ -1350,6 +1388,7 @@ static void stray_clear_icon_pixmap(TrayIcon *icon) {
         for (i = 0; i < icon->icon_pixmap_count; i++) {
             free(icon->icon_pixmaps[i].data);
         }
+
         free(icon->icon_pixmaps);
         icon->icon_pixmaps = NULL;
         icon->icon_pixmap_count = 0;
@@ -1513,6 +1552,7 @@ static int menu_ensure_capacity(TrayMenu *menu) {
         menu->items = new_items;
         menu->item_capacity = new_capacity;
     }
+
     return 1;
 }
 
@@ -1623,6 +1663,7 @@ int stray_menu_add_submenu(
     if (!menu || !submenu) return -1;
 
     item = create_menu_item(menu, label, STRAY_MENU_ITEM_NORMAL, NULL, NULL);
+
     if (!item) return -1;
 
     item->submenu = submenu;
@@ -1770,7 +1811,6 @@ void stray_menu_set_item_icon(
 
 void stray_set_menu(TrayIcon *icon, TrayMenu *menu) {
     if (!icon) return;
-
     if (icon->menu && icon->menu != menu) { icon->menu->icon = NULL; }
 
     icon->menu = menu;
@@ -1836,6 +1876,7 @@ void stray_destroy(TrayIcon *icon) {
         dbus_connection_unregister_object_path(icon->conn, STRAY_OBJECT_PATH);
         dbus_connection_unregister_object_path(
             icon->conn, STRAY_MENU_OBJECT_PATH);
+
         dbus_connection_unref(icon->conn);
     }
 
