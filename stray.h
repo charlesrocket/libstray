@@ -843,6 +843,7 @@ handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     dbus_message_iter_get_basic(&iter, &parent_id);
     dbus_message_iter_next(&iter);
     dbus_message_iter_get_basic(&iter, &recursion_depth);
+    dbus_message_iter_next(&iter);
 
     /* determine which menu to show based on parent_id */
     if (parent_id == 0) {
@@ -905,6 +906,9 @@ handle_menu_event(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     dbus_message_iter_get_basic(&iter, &id);
     dbus_message_iter_next(&iter);
     dbus_message_iter_get_basic(&iter, &type);
+    /* TODO */
+    dbus_message_iter_next(&iter); /* skip data (v) */
+    dbus_message_iter_next(&iter); /* skip timestamp (u) */
 
     if (strcmp(type, "clicked") == 0) {
         TrayMenuItem *item = find_menu_item_recursive(icon->menu, id);
@@ -966,6 +970,8 @@ static DBusHandlerResult handle_menu_get_group_properties(
 
             dbus_message_iter_next(&id_array_iter);
         }
+
+        dbus_message_iter_next(&iter);
     }
 
     dbus_message_iter_close_container(&args, &props_array);
