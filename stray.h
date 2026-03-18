@@ -431,7 +431,7 @@ static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
 
     if (all || strcmp(property_name, "Menu") == 0)
         add_dict_entry(
-            &changed_props, "Menu", DBUS_TYPE_STRING, "s", &menu_path);
+            &changed_props, "Menu", DBUS_TYPE_OBJECT_PATH, "o", &menu_path);
 
     if (all || strcmp(property_name, "ItemIsMenu") == 0)
         add_dict_entry(
