@@ -179,6 +179,7 @@ struct TrayMenu {
 };
 
 struct TrayIcon {
+    char *app_id;
     char *service_name;
     char *icon_name;
     char *title;
@@ -410,7 +411,7 @@ static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
     current_title = icon->title ? icon->title : STRAY_DEFAULT_TITLE;
     menu_path = icon->menu ? STRAY_MENU_OBJECT_PATH : "/NO_DBUSMENU";
 
-    id_str = icon->title ? icon->title : STRAY_DEFAULT_ID;
+    id_str = icon->app_id ? icon->app_id : STRAY_DEFAULT_ID;
 
     item_is_menu = (icon->menu != NULL);
 
@@ -585,7 +586,7 @@ static void get_icon_properties(
     *out_title = icon->title ? icon->title : STRAY_DEFAULT_TITLE;
     *out_menu = icon->menu ? STRAY_MENU_OBJECT_PATH : "/NO_DBUSMENU";
     *out_is_menu = (icon->menu != NULL);
-    *out_id = icon->title ? icon->title : STRAY_DEFAULT_ID;
+    *out_id = icon->app_id ? icon->app_id : STRAY_DEFAULT_ID;
 
     switch (icon->status) {
         case STRAY_STATUS_PASSIVE:
@@ -1280,6 +1281,7 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
 
     /* set initial values */
     icon->conn = conn;
+    icon->app_id = strdup(app_name);
     icon->service_name = strdup(service_name);
     icon->status = STRAY_STATUS_ACTIVE;
     icon->icon_name = safe_strdup(icon_name ? icon_name : STRAY_DEFAULT_ICON);
@@ -1939,6 +1941,7 @@ void stray_destroy(TrayIcon *icon) {
         dbus_connection_unref(icon->conn);
     }
 
+    safe_free(&icon->app_id);
     safe_free(&icon->service_name);
     safe_free(&icon->icon_name);
     safe_free(&icon->title);
