@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.2] - 2026-03-18
+
+### Bug Fixes
+
+- Improve `Properties` handling
+- Correct pixel data
+- Update custom icon color
+- Fix `Menu` property
+- Add status argument
+- Update `AboutToShowGroup`
+- Safeguard iterators
+- Check watcher presence
+- Track `app_id`
+- Flush connections
+- Set active status
+
 ## [0.3.1] - 2026-03-14
 
 ### Bug Fixes
