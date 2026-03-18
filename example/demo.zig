@@ -123,6 +123,7 @@ pub fn main() !void {
         } else if (count == 15) {
             std.debug.print("Changing menu item icon\n", .{});
             try menu.setItemIcon(open_item, "document-save");
+            icon.setStatus(.active);
         } else if (count == 30) {
             icon.setStatus(.passive);
             std.debug.print("Exiting\n", .{});
