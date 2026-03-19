@@ -126,10 +126,10 @@ pub const Icon = struct {
     }
 
     /// Registers the tray icon with the system.
-    pub fn register(self: Icon) !void {
-        if (c.stray_register(self.handle) == 0) {
-            return error.RegisterFailed;
-        }
+    /// Returns `true` on success.
+    pub fn register(self: Icon) !bool {
+        const result = c.stray_register(self.handle);
+        return result != 0;
     }
 
     /// Sets the icon status.
