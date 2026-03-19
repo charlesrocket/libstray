@@ -177,6 +177,7 @@ struct TrayMenu {
     int item_count;
     int item_capacity;
     int next_id;
+    int *next_id_ptr;
     dbus_uint32_t revision;
 };
 
@@ -1567,6 +1568,7 @@ TrayMenu *stray_menu_create(void) {
     if (menu) {
         int i;
         menu->next_id = 1;
+        menu->next_id_ptr = &menu->next_id;
         menu->item_count = 0;
         menu->item_capacity = 8;
         menu->items = calloc(menu->item_capacity, sizeof(TrayMenuItem *));
@@ -1652,7 +1654,7 @@ static TrayMenuItem *create_menu_item(
 
     if (!item) return NULL;
 
-    item->id = menu->next_id++;
+    item->id = (*menu->next_id_ptr)++;
     item->type = type;
     item->enabled = TRUE;
     item->checked = FALSE;
@@ -1753,6 +1755,7 @@ int stray_menu_add_submenu(
 
     item->submenu = submenu;
     submenu->parent = menu;
+    submenu->next_id_ptr = menu->next_id_ptr;
 
     /* notify the system if we have an icon */
     if (menu->icon) {
