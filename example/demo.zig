@@ -1,7 +1,16 @@
+// callback context
 const Context = struct {
     icon: *Icon,
     item_id: ?i32 = null,
     target_id: ?i32 = null,
+};
+
+// radio group
+const RadioGroup = struct {
+    selected_id: i32 = -1,
+    option1_id: i32 = -1,
+    option2_id: i32 = -1,
+    option3_id: i32 = -1,
 };
 
 pub fn main() !void {
@@ -15,16 +24,6 @@ pub fn main() !void {
         "\x1b[1mSTRAY demo\x1b[0m\nPress Ctrl+C to exit\n",
         .{},
     );
-
-    // radio group state
-    const RadioGroup = struct {
-        selected_id: i32 = -1,
-        option1_id: i32 = -1,
-        option2_id: i32 = -1,
-        option3_id: i32 = -1,
-    };
-
-    var radio_group = RadioGroup{};
 
     // create tray icon
     var icon = try Icon.create(allocator, "stray-demo", "starred", "STRAY demo");
@@ -85,6 +84,8 @@ pub fn main() !void {
     _ = try menu.addSeparator();
 
     // add radio menu items and store their actual IDs
+    var radio_group = RadioGroup{};
+
     radio_group.option1_id = try menu.addRadioItem(
         "Radio Option 1",
         onRadio,
@@ -230,12 +231,7 @@ fn onCheck(menu_id: i32, user_data: ?*anyopaque) void {
 fn onRadio(menu_id: i32, user_data: ?*anyopaque) void {
     if (user_data) |ptr| {
         const radio_group_ptr = @as(
-            *struct {
-                selected_id: i32,
-                option1_id: i32,
-                option2_id: i32,
-                option3_id: i32,
-            },
+            *RadioGroup,
             @ptrCast(@alignCast(ptr)),
         );
 
