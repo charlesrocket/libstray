@@ -26,7 +26,13 @@ pub fn main() !void {
     );
 
     // create tray icon
-    var icon = try Icon.create(allocator, "stray-demo", "starred", "STRAY demo");
+    var icon = try Icon.create(
+        allocator,
+        "stray-demo",
+        "starred",
+        "STRAY demo",
+    );
+
     defer icon.destroy();
 
     var sfd = [_]std.posix.pollfd{.{
@@ -58,20 +64,40 @@ pub fn main() !void {
 
     // add demo items
     var change_ctx = Context{ .icon = &icon, .target_id = open_item };
-    const change_item = try menu.addItem("Change item", onChange, &change_ctx);
+    const change_item = try menu.addItem(
+        "Change item",
+        onChange,
+        &change_ctx,
+    );
+
     try menu.setItemIcon(change_item, "dialog-question");
     change_ctx.item_id = change_item;
 
     var status_ctx = Context{ .icon = &icon };
-    const status_item = try menu.addItem("Change status", onAttention, &status_ctx);
+    const status_item = try menu.addItem(
+        "Change status",
+        onAttention,
+        &status_ctx,
+    );
+
     status_ctx.item_id = status_item;
 
     var tooltip_ctx = Context{ .icon = &icon };
-    const tooltip_item = try menu.addItem("Change tooltip", onTooltip, &tooltip_ctx);
+    const tooltip_item = try menu.addItem(
+        "Change tooltip",
+        onTooltip,
+        &tooltip_ctx,
+    );
+
     tooltip_ctx.item_id = tooltip_item;
 
     var pixmap_ctx = Context{ .icon = &icon };
-    const pixmap_item = try menu.addItem("Set custom Pixmap", onCustomPixmap, &pixmap_ctx);
+    const pixmap_item = try menu.addItem(
+        "Set custom Pixmap",
+        onCustomPixmap,
+        &pixmap_ctx,
+    );
+
     pixmap_ctx.item_id = pixmap_item;
 
     _ = try menu.addSeparator();
@@ -178,7 +204,11 @@ fn onCustomPixmap(menu_id: i32, user_data: ?*anyopaque) void {
     std.debug.print("Switching to a custom pixmap\n", .{});
 
     const ctx = @as(*Context, @ptrCast(@alignCast(user_data.?)));
-    const custom_icon = createCustomIcon(ctx.icon.allocator, 0xFFA020F0) catch return;
+    const custom_icon = createCustomIcon(
+        ctx.icon.allocator,
+        0xFFA020F0,
+    ) catch return;
+
     defer ctx.icon.allocator.free(custom_icon);
     ctx.icon.setIconPixmap(16, 16, custom_icon) catch return;
     ctx.icon.setMenuItemEnabled(ctx.item_id.?, false);
