@@ -40,9 +40,6 @@ pub fn main() !void {
     var menu = try Menu.create(allocator);
     var submenu = try Menu.create(allocator);
 
-    const submenu_open_item = try submenu.addItem("Open", onOpen, null);
-    try submenu.setItemIcon(submenu_open_item, "document-open");
-
     // add menu items with icons
     const open_item = try menu.addItem("Open", onOpen, null);
     try menu.setItemIcon(open_item, "document-open");
@@ -82,6 +79,7 @@ pub fn main() !void {
 
     // add a submenu to the main menu
     const submenu_item = try menu.addSubmenu("Submenu", &submenu);
+    _ = try submenu.addItem("Test", onTest, null);
     try menu.setItemIcon(submenu_item, "folder");
 
     _ = try menu.addSeparator();
@@ -265,6 +263,12 @@ fn onOpen(menu_id: i32, user_data: ?*anyopaque) void {
     _ = menu_id;
     _ = user_data;
     std.debug.print("Open clicked!\n", .{});
+}
+
+fn onTest(menu_id: i32, user_data: ?*anyopaque) void {
+    _ = menu_id;
+    _ = user_data;
+    std.debug.print("Test clicked!\n", .{});
 }
 
 fn onToggle(menu_id: i32, user_data: ?*anyopaque) void {
