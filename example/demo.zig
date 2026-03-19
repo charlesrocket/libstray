@@ -19,6 +19,12 @@ pub fn main() !void {
     var icon = try Icon.create(allocator, "stray-demo", "starred", "STRAY demo");
     defer icon.destroy();
 
+    var sfd = [_]std.posix.pollfd{.{
+        .fd = try icon.fd(),
+        .events = std.posix.POLL.IN,
+        .revents = 0,
+    }};
+
     // create menus
     var menu = try Menu.create(allocator);
     var submenu = try Menu.create(allocator);
@@ -149,8 +155,9 @@ pub fn main() !void {
             radio_group.selected_id == radio_group.option3_id,
         );
 
+        // listen for D-Bus data
+        _ = try std.posix.poll(&sfd, -1);
         icon.processEvents();
-        std.Thread.sleep(1 * std.time.ns_per_s);
     }
 }
 

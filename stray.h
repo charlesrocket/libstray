@@ -109,6 +109,8 @@ void stray_set_tooltip(TrayIcon *icon, const char *title, const char *text);
 void stray_destroy(TrayIcon *icon);
 /* Registers with D-Bus */
 int stray_register(TrayIcon *icon);
+/* Returns a D-Bus file descriptor */
+int stray_get_fd(TrayIcon *icon);
 
 /* Menu API */
 
@@ -211,6 +213,13 @@ static void safe_free(char **str) {
         free(*str);
         *str = NULL;
     }
+}
+
+int stray_get_fd(TrayIcon *icon) {
+    int fd = -1;
+    if (!icon || !icon->conn) return -1;
+    if (!dbus_connection_get_unix_fd(icon->conn, &fd)) return -1;
+    return fd;
 }
 
 static void add_variant(

@@ -213,6 +213,13 @@ pub const Icon = struct {
         c.stray_set_scroll_callback(self.handle, Wrapper.call, ctx);
     }
 
+    /// Returns the underlying D-Bus file descriptor.
+    pub fn fd(self: Icon) !i32 {
+        const result = c.stray_get_fd(self.handle);
+        if (result < 0) return error.GetFdFailed;
+        return result;
+    }
+
     /// Processes pending events (non-blocking).
     pub fn processEvents(self: Icon) void {
         c.stray_process_events(self.handle);
