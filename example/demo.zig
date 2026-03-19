@@ -57,10 +57,10 @@ pub fn main() !void {
     _ = try menu.addSeparator();
 
     // add demo items
-    var new_icon_ctx = Context{ .icon = &icon, .target_id = open_item };
-    const new_icon_item = try menu.addItem("Change item icon", onChangeIcon, &new_icon_ctx);
-    try menu.setItemIcon(new_icon_item, "dialog-question");
-    new_icon_ctx.item_id = new_icon_item;
+    var change_ctx = Context{ .icon = &icon, .target_id = open_item };
+    const change_item = try menu.addItem("Change item", onChange, &change_ctx);
+    try menu.setItemIcon(change_item, "dialog-question");
+    change_ctx.item_id = change_item;
 
     var status_ctx = Context{ .icon = &icon };
     const status_item = try menu.addItem("Change status", onAttention, &status_ctx);
@@ -184,12 +184,13 @@ fn onCustomPixmap(menu_id: i32, user_data: ?*anyopaque) void {
     ctx.icon.setMenuItemEnabled(ctx.item_id.?, false);
 }
 
-fn onChangeIcon(menu_id: i32, user_data: ?*anyopaque) void {
+fn onChange(menu_id: i32, user_data: ?*anyopaque) void {
     _ = menu_id;
-    std.debug.print("Changing the item icon\n", .{});
+    std.debug.print("Changing the item\n", .{});
 
     const ctx = @as(*Context, @ptrCast(@alignCast(user_data.?)));
     ctx.icon.menu.?.setItemIcon(ctx.item_id.?, "dialog-error") catch return;
+    ctx.icon.setMenuItemLabel(ctx.item_id.?, "Updated item") catch return;
     ctx.icon.setMenuItemEnabled(ctx.item_id.?, false);
 }
 
