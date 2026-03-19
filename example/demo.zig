@@ -1,9 +1,20 @@
+const Context = struct {
+    icon: *Icon,
+    item_id: ?i32 = null,
+    target_id: ?i32 = null,
+};
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
     var is_active = true;
     var is_checked = false;
+
+    std.debug.print(
+        "\x1b[1mSTRAY demo\x1b[0m\nPress Ctrl+C to exit\n",
+        .{},
+    );
 
     // radio group state
     const RadioGroup = struct {
@@ -46,6 +57,28 @@ pub fn main() !void {
     );
 
     try menu.setItemIcon(checked_item, "emblem-default");
+
+    _ = try menu.addSeparator();
+
+    // add demo items
+    var new_icon_ctx = Context{ .icon = &icon, .target_id = open_item };
+    const new_icon_item = try menu.addItem("Change item icon", onChangeIcon, &new_icon_ctx);
+    try menu.setItemIcon(new_icon_item, "dialog-question");
+    new_icon_ctx.item_id = new_icon_item;
+
+    var status_ctx = Context{ .icon = &icon };
+    const status_item = try menu.addItem("Change status", onAttention, &status_ctx);
+    status_ctx.item_id = status_item;
+
+    var tooltip_ctx = Context{ .icon = &icon };
+    const tooltip_item = try menu.addItem("Change tooltip", onTooltip, &tooltip_ctx);
+    tooltip_ctx.item_id = tooltip_item;
+
+    var pixmap_ctx = Context{ .icon = &icon };
+    const pixmap_item = try menu.addItem("Set custom Pixmap", onCustomPixmap, &pixmap_ctx);
+    pixmap_ctx.item_id = pixmap_item;
+
+    _ = try menu.addSeparator();
 
     // add a submenu to the main menu
     const submenu_item = try menu.addSubmenu("Submenu", &submenu);
@@ -98,44 +131,17 @@ pub fn main() !void {
     // disable menu item
     icon.setMenuItemEnabled(disabled_item, false);
 
-    // register with system
-    try icon.register();
+    // register with the system
+    const registered = try icon.register();
+    if (!registered) {
+        std.debug.print("No tray watcher running yet\n", .{});
+    }
 
     // set title
     try icon.setTitle("Demo title");
 
-    std.debug.print(
-        "\x1b[1mSTRAY demo\x1b[0m\nPress Ctrl+C to exit\n",
-        .{},
-    );
-
-    // create a custom pixmap icon
-    const custom_icon = try createCustomIcon(allocator, 0xFFA020F0);
-    defer allocator.free(custom_icon);
-
     // main event loop
-    var count: usize = 0;
-
-    std.debug.print("Switching to a custom pixmap in 5 seconds\n", .{});
-
     while (is_active) {
-        count += 1;
-        if (count == 5) {
-            try icon.setIconPixmap(16, 16, custom_icon);
-        } else if (count == 10) {
-            std.debug.print("Setting the tooltip\n", .{});
-            try icon.setTooltip("Demo", "text");
-            icon.setStatus(.needs_attention);
-        } else if (count == 15) {
-            std.debug.print("Changing menu item icon\n", .{});
-            try menu.setItemIcon(open_item, "document-save");
-            icon.setStatus(.active);
-        } else if (count == 30) {
-            icon.setStatus(.passive);
-            std.debug.print("Exiting\n", .{});
-            is_active = false;
-        }
-
         // toggle the checked item state
         icon.setMenuItemChecked(checked_item, !is_checked);
 
@@ -159,11 +165,51 @@ pub fn main() !void {
         _ = try std.posix.poll(&sfd, -1);
         icon.processEvents();
     }
+
+    std.debug.print("Exiting\n", .{});
 }
 
 fn onClick(user_data: ?*anyopaque) void {
     _ = user_data;
     std.debug.print("Tray icon clicked!\n", .{});
+}
+
+fn onCustomPixmap(menu_id: i32, user_data: ?*anyopaque) void {
+    _ = menu_id;
+    std.debug.print("Switching to a custom pixmap\n", .{});
+
+    const ctx = @as(*Context, @ptrCast(@alignCast(user_data.?)));
+    const custom_icon = createCustomIcon(ctx.icon.allocator, 0xFFA020F0) catch return;
+    defer ctx.icon.allocator.free(custom_icon);
+    ctx.icon.setIconPixmap(16, 16, custom_icon) catch return;
+    ctx.icon.setMenuItemEnabled(ctx.item_id.?, false);
+}
+
+fn onChangeIcon(menu_id: i32, user_data: ?*anyopaque) void {
+    _ = menu_id;
+    std.debug.print("Changing the item icon\n", .{});
+
+    const ctx = @as(*Context, @ptrCast(@alignCast(user_data.?)));
+    ctx.icon.menu.?.setItemIcon(ctx.item_id.?, "dialog-error") catch return;
+    ctx.icon.setMenuItemEnabled(ctx.item_id.?, false);
+}
+
+fn onAttention(menu_id: i32, user_data: ?*anyopaque) void {
+    _ = menu_id;
+    std.debug.print("Changing the status to 'Needs attention'\n", .{});
+
+    const ctx = @as(*Context, @ptrCast(@alignCast(user_data.?)));
+    ctx.icon.setStatus(.needs_attention);
+    ctx.icon.setMenuItemEnabled(ctx.item_id.?, false);
+}
+
+fn onTooltip(menu_id: i32, user_data: ?*anyopaque) void {
+    _ = menu_id;
+    std.debug.print("Changing the tooltip\n", .{});
+
+    const ctx = @as(*Context, @ptrCast(@alignCast(user_data.?)));
+    ctx.icon.setTooltip("Demo", "text") catch return;
+    ctx.icon.setMenuItemEnabled(ctx.item_id.?, false);
 }
 
 fn onCheck(menu_id: i32, user_data: ?*anyopaque) void {

@@ -41,7 +41,7 @@ pub fn main() !void {
     try icon.setClickCallback(onClick, null);
 
     // TODO set up D-Bus CI session
-    icon.register() catch {};
+    _ = try icon.register();
 
     const custom_icon = try createCustomIcon(allocator);
     defer allocator.free(custom_icon);
