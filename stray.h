@@ -216,6 +216,8 @@ static void safe_free(char **str) {
     }
 }
 
+static int stray_instance_counter = 0;
+
 int stray_get_fd(TrayIcon *icon) {
     int fd = -1;
     if (!icon || !icon->conn) return -1;
@@ -1276,6 +1278,7 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
     DBusObjectPathVTable vtable;
     DBusObjectPathVTable menu_vtable;
     DBusError err;
+    int instance_id;
     int ret;
 
     if (!app_name) {
@@ -1295,9 +1298,11 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
         return NULL;
     }
 
+    instance_id = ++stray_instance_counter;
+
     snprintf(
-        service_name, sizeof(service_name), "org.kde.StatusNotifierItem.%s-%d",
-        app_name, getpid());
+        service_name, sizeof(service_name), "org.kde.StatusNotifierItem-%d-%d",
+        getpid(), instance_id);
 
     ret = dbus_bus_request_name(
         conn, service_name, DBUS_NAME_FLAG_REPLACE_EXISTING, &err);
