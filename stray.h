@@ -851,6 +851,7 @@ static int watcher_exists(DBusConnection *conn) {
 
 static int
 register_with_watcher(DBusConnection *conn, const char *service_name) {
+    int success;
     DBusError err;
     DBusMessage *reply;
     DBusMessage *msg = dbus_message_new_method_call(
@@ -872,9 +873,17 @@ register_with_watcher(DBusConnection *conn, const char *service_name) {
         return 0;
     }
 
-    if (reply) dbus_message_unref(reply);
+    if (!reply) return 0;
 
-    return 1;
+    success = (dbus_message_get_type(reply) != DBUS_MESSAGE_TYPE_ERROR);
+    if (!success) {
+        fprintf(
+            stderr, "RegisterStatusNotifierItem failed: %s\n",
+            dbus_message_get_error_name(reply));
+    }
+
+    dbus_message_unref(reply);
+    return success;
 }
 
 static DBusHandlerResult
