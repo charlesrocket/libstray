@@ -152,8 +152,9 @@ pub fn main() !void {
     // set menu
     icon.setMenu(&menu);
 
-    // set click callback
+    // set callbacks
     try icon.setClickCallback(onClick, null);
+    try icon.setScrollCallback(onScroll, null);
 
     // disable menu item
     icon.setMenuItemEnabled(disabled_item, false);
@@ -207,6 +208,23 @@ fn onClick(x: i32, y: i32, user_data: ?*anyopaque) void {
     } else {
         std.debug.print("Tray icon clicked at ({}, {})\n", .{ x, y });
     }
+}
+
+fn onScroll(
+    direction: stray.ScrollDirection,
+    delta: i32,
+    user_data: ?*anyopaque,
+) void {
+    _ = user_data;
+
+    const dir_str: []const u8 = switch (direction) {
+        .up => "up",
+        .down => "down",
+        .left => "left",
+        .right => "right",
+    };
+
+    std.debug.print("Scroll {s} delta={d}\n", .{ dir_str, delta });
 }
 
 fn onCustomPixmap(menu_id: i32, user_data: ?*anyopaque) void {
