@@ -72,8 +72,10 @@ typedef enum {
 } TrayStatus;
 
 typedef void (*TrayMenuCallback)(int menu_id, void *user_data);
-typedef void (*TrayClickCallback)(void *user_data);
-typedef void (*TrayButtonCallback)(TrayButton button, void *user_data);
+typedef void (*TrayClickCallback)(int x, int y, void *user_data);
+typedef void (*TrayButtonCallback)(
+    TrayButton button, int x, int y, void *user_data);
+
 typedef void (*TrayScrollCallback)(
     TrayScrollDirection direction, int delta, void *user_data);
 
@@ -1141,6 +1143,7 @@ message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
     const char *interface;
     const char *member;
     TrayIcon *icon = (TrayIcon *)data;
+
     if (!icon) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
     interface = dbus_message_get_interface(msg);
@@ -1162,36 +1165,54 @@ message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
             handle_property_get(conn, msg, icon, prop);
             return DBUS_HANDLER_RESULT_HANDLED;
         }
+
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     }
 
     /* handle StatusNotifierItem interface methods */
     if (strcmp(interface, STRAY_INTERFACE_NAME) == 0) {
         DBusMessage *reply = NULL;
 
-        if (strcmp(member, "Activate") == 0) {
-            /* left click */
-            if (icon->button_callback) {
-                icon->button_callback(
-                    STRAY_BUTTON_LEFT, icon->button_user_data);
-            } else if (icon->click_callback) {
-                /* fallback to simple callback */
-                icon->click_callback(icon->user_data);
+        if (strcmp(member, "Activate") == 0 ||
+            strcmp(member, "SecondaryActivate") == 0 ||
+            strcmp(member, "ContextMenu") == 0) {
+
+            dbus_int32_t x = 0, y = 0;
+            DBusMessageIter iter;
+
+            if (dbus_message_iter_init(msg, &iter)) {
+                if (dbus_message_iter_get_arg_type(&iter) == DBUS_TYPE_INT32) {
+                    dbus_message_iter_get_basic(&iter, &x);
+                    dbus_message_iter_next(&iter);
+                }
+
+                if (dbus_message_iter_get_arg_type(&iter) == DBUS_TYPE_INT32) {
+                    dbus_message_iter_get_basic(&iter, &y);
+                }
             }
 
-            reply = dbus_message_new_method_return(msg);
-        } else if (strcmp(member, "SecondaryActivate") == 0) {
-            /* middle click */
-            if (icon->button_callback) {
-                icon->button_callback(
-                    STRAY_BUTTON_MIDDLE, icon->button_user_data);
-            }
+            if (strcmp(member, "Activate") == 0) {
+                /* left click */
+                if (icon->button_callback) {
+                    icon->button_callback(
+                        STRAY_BUTTON_LEFT, (int)x, (int)y,
+                        icon->button_user_data);
+                } else if (icon->click_callback)
+                    icon->click_callback((int)x, (int)y, icon->user_data);
 
-            reply = dbus_message_new_method_return(msg);
-        } else if (strcmp(member, "ContextMenu") == 0) {
-            /* right click (typically handled by the menu system) */
-            if (icon->button_callback) {
-                icon->button_callback(
-                    STRAY_BUTTON_RIGHT, icon->button_user_data);
+            } else if (strcmp(member, "SecondaryActivate") == 0) {
+                /* middle click */
+                if (icon->button_callback)
+                    icon->button_callback(
+                        STRAY_BUTTON_MIDDLE, (int)x, (int)y,
+                        icon->button_user_data);
+
+            } else {
+                /* right click (typically handled by the menu system) */
+                if (icon->button_callback)
+                    icon->button_callback(
+                        STRAY_BUTTON_RIGHT, (int)x, (int)y,
+                        icon->button_user_data);
             }
 
             reply = dbus_message_new_method_return(msg);

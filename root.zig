@@ -22,16 +22,32 @@ pub const ScrollDirection = enum(c_int) {
 };
 
 /// Click callback function (simple, button-agnostic).
-pub const ClickCallback = *const fn (user_data: ?*anyopaque) void;
+pub const ClickCallback = *const fn (
+    x: i32,
+    y: i32,
+    user_data: ?*anyopaque,
+) void;
 
 /// Button callback function.
-pub const ButtonCallback = *const fn (button: Button, user_data: ?*anyopaque) void;
+pub const ButtonCallback = *const fn (
+    button: Button,
+    x: i32,
+    y: i32,
+    user_data: ?*anyopaque,
+) void;
 
 /// Scroll callback function.
-pub const ScrollCallback = *const fn (direction: ScrollDirection, delta: i32, user_data: ?*anyopaque) void;
+pub const ScrollCallback = *const fn (
+    direction: ScrollDirection,
+    delta: i32,
+    user_data: ?*anyopaque,
+) void;
 
 /// Menu callback function.
-pub const MenuCallback = *const fn (menu_id: i32, user_data: ?*anyopaque) void;
+pub const MenuCallback = *const fn (
+    menu_id: i32,
+    user_data: ?*anyopaque,
+) void;
 
 /// Tray icon status.
 pub const Status = enum(c_uint) {
@@ -144,9 +160,13 @@ pub const Icon = struct {
         user_data: ?*anyopaque,
     ) !void {
         const Wrapper = struct {
-            fn call(data: ?*anyopaque) callconv(.c) void {
-                const ctx = @as(*CallbackContext, @ptrCast(@alignCast(data.?)));
-                ctx.callback(ctx.user_data);
+            fn call(x: c_int, y: c_int, data: ?*anyopaque) callconv(.c) void {
+                const ctx = @as(
+                    *CallbackContext,
+                    @ptrCast(@alignCast(data.?)),
+                );
+
+                ctx.callback(@intCast(x), @intCast(y), ctx.user_data);
             }
         };
 
@@ -168,11 +188,19 @@ pub const Icon = struct {
         user_data: ?*anyopaque,
     ) !void {
         const Wrapper = struct {
-            fn call(button: c_uint, data: ?*anyopaque) callconv(.c) void {
-                const ctx = @as(*ButtonCallbackContext, @ptrCast(@alignCast(data.?)));
-                const btn = @as(Button, @enumFromInt(button));
+            fn call(
+                button: c_int,
+                x: c_int,
+                y: c_int,
+                data: ?*anyopaque,
+            ) callconv(.c) void {
+                const ctx = @as(
+                    *ButtonCallbackContext,
+                    @ptrCast(@alignCast(data.?)),
+                );
 
-                ctx.callback(btn, ctx.user_data);
+                const btn = @as(Button, @enumFromInt(button));
+                ctx.callback(btn, @intCast(x), @intCast(y), ctx.user_data);
             }
         };
 

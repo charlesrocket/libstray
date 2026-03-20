@@ -41,9 +41,8 @@ pub fn main() !void {
         .revents = 0,
     }};
 
-    // create menus
+    // create a menu
     var menu = try Menu.create(allocator);
-    var submenu = try Menu.create(allocator);
 
     // add menu items with icons
     const open_item = try menu.addItem("Open", onOpen, null);
@@ -102,7 +101,10 @@ pub fn main() !void {
 
     _ = try menu.addSeparator();
 
-    // add a submenu to the main menu
+    // create a submenu
+    var submenu = try Menu.create(allocator);
+    errdefer submenu.destroy();
+
     const submenu_item = try menu.addSubmenu("Submenu", &submenu);
     _ = try submenu.addItem("Test", onTest, null);
     try menu.setItemIcon(submenu_item, "folder");
@@ -194,9 +196,17 @@ pub fn main() !void {
     std.debug.print("Exiting\n", .{});
 }
 
-fn onClick(user_data: ?*anyopaque) void {
+fn onClick(x: i32, y: i32, user_data: ?*anyopaque) void {
     _ = user_data;
-    std.debug.print("Tray icon clicked!\n", .{});
+
+    if (x == 0 and y == 0) {
+        std.debug.print(
+            "Tray icon clicked! (no position hint from the host)\n",
+            .{},
+        );
+    } else {
+        std.debug.print("Tray icon clicked at ({}, {})\n", .{ x, y });
+    }
 }
 
 fn onCustomPixmap(menu_id: i32, user_data: ?*anyopaque) void {

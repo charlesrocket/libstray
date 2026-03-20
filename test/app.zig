@@ -59,8 +59,11 @@ pub fn main() !void {
     }
 }
 
-fn onClick(user_data: ?*anyopaque) void {
+fn onClick(x: i32, y: i32, user_data: ?*anyopaque) void {
     _ = user_data;
+    _ = x;
+    _ = y;
+
     std.debug.print("Tray icon clicked!\n", .{});
 }
 
