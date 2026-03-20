@@ -1219,28 +1219,34 @@ message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
         } else if (strcmp(member, "Scroll") == 0) {
             /* scroll event */
             DBusMessageIter iter;
-            dbus_int32_t delta;
-            const char *orientation;
+            dbus_int32_t delta = 0;
+            const char *orientation = NULL;
 
-            if (dbus_message_iter_init(msg, &iter)) {
+            if (dbus_message_iter_init(msg, &iter) &&
+                dbus_message_iter_get_arg_type(&iter) == DBUS_TYPE_INT32) {
+
                 dbus_message_iter_get_basic(&iter, &delta);
                 dbus_message_iter_next(&iter);
-                dbus_message_iter_get_basic(&iter, &orientation);
 
-                if (icon->scroll_callback) {
-                    TrayScrollDirection direction;
-
-                    if (strcmp(orientation, "vertical") == 0) {
-                        direction =
-                            (delta > 0) ? STRAY_SCROLL_UP : STRAY_SCROLL_DOWN;
-                    } else {
-                        direction = (delta > 0) ? STRAY_SCROLL_RIGHT
-                                                : STRAY_SCROLL_LEFT;
-                    }
-
-                    icon->scroll_callback(
-                        direction, abs(delta), icon->scroll_user_data);
+                if (dbus_message_iter_get_arg_type(&iter) == DBUS_TYPE_STRING) {
+                    dbus_message_iter_get_basic(&iter, &orientation);
                 }
+            }
+
+            if (icon->scroll_callback && orientation != NULL) {
+                TrayScrollDirection direction;
+                dbus_int32_t abs_delta = delta < 0 ? -delta : delta;
+
+                if (strcmp(orientation, "vertical") == 0) {
+                    direction =
+                        (delta > 0) ? STRAY_SCROLL_UP : STRAY_SCROLL_DOWN;
+                } else {
+                    direction =
+                        (delta > 0) ? STRAY_SCROLL_RIGHT : STRAY_SCROLL_LEFT;
+                }
+
+                icon->scroll_callback(
+                    direction, (int)abs_delta, icon->scroll_user_data);
             }
 
             reply = dbus_message_new_method_return(msg);
