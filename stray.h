@@ -1653,6 +1653,17 @@ static TrayMenuItem *create_menu_item(
 
     if (!item) return NULL;
 
+    if (label) {
+        item->label = safe_strdup(label);
+
+        if (!item->label) {
+            free(item);
+            return NULL;
+        }
+    } else {
+        item->label = NULL;
+    }
+
     item->id = (*menu->next_id_ptr)++;
     item->type = type;
     item->enabled = TRUE;
@@ -1662,16 +1673,6 @@ static TrayMenuItem *create_menu_item(
     item->submenu = NULL;
     item->icon_name = NULL;
 
-    if (label) {
-        item->label = safe_strdup(label);
-        if (!item->label) {
-            free(item);
-            return NULL;
-        }
-    } else {
-        item->label = NULL;
-    }
-
     menu->items[menu->item_count] = item;
     menu->item_count++;
 
@@ -1679,14 +1680,15 @@ static TrayMenuItem *create_menu_item(
 }
 
 void signal_layout_update(TrayMenu *menu) {
-    if (menu->icon) {
-        TrayIcon *icon = get_root_icon(menu);
+    TrayIcon *icon;
 
-        if (icon) {
-            icon->menu->revision++;
-            emit_layout_updated(icon, 0);
-        }
-    }
+    if (!menu) return;
+
+    icon = get_root_icon(menu);
+    if (!icon) return;
+
+    icon->menu->revision++;
+    emit_layout_updated(icon, 0);
 }
 
 int stray_menu_add_item(
@@ -1896,17 +1898,6 @@ void stray_menu_set_item_icon(
     }
 }
 
-void stray_set_menu(TrayIcon *icon, TrayMenu *menu) {
-    if (!icon) return;
-    if (icon->menu && icon->menu != menu) { icon->menu->icon = NULL; }
-
-    icon->menu = menu;
-
-    if (menu) { menu->icon = icon; }
-
-    emit_properties_changed(icon, "All");
-}
-
 static void stray_menu_destroy(TrayMenu *menu) {
     int i;
 
@@ -1926,6 +1917,23 @@ static void stray_menu_destroy(TrayMenu *menu) {
 
     free(menu->items);
     free(menu);
+}
+
+void stray_set_menu(TrayIcon *icon, TrayMenu *menu) {
+    if (!icon) return;
+    if (icon->menu == menu) return;
+
+    if (icon->menu) {
+        icon->menu->icon = NULL;
+        stray_menu_destroy(icon->menu);
+        icon->menu = NULL;
+    }
+
+    icon->menu = menu;
+
+    if (menu) menu->icon = icon;
+
+    emit_properties_changed(icon, "All");
 }
 
 void stray_destroy(TrayIcon *icon) {
