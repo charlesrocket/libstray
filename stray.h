@@ -1326,8 +1326,8 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
 
     /* set initial values */
     icon->conn = conn;
-    icon->app_id = strdup(app_name);
-    icon->service_name = strdup(service_name);
+    icon->app_id = safe_strdup(app_name);
+    icon->service_name = safe_strdup(service_name);
     icon->status = STRAY_STATUS_ACTIVE;
     icon->icon_name = safe_strdup(icon_name ? icon_name : STRAY_DEFAULT_ICON);
     icon->title = safe_strdup(title ? title : app_name);
@@ -1343,11 +1343,10 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
     icon->icon_pixmaps = NULL;
     icon->icon_pixmap_count = 0;
 
-    if (!icon->service_name || !icon->icon_name || !icon->title) {
-        safe_free(&icon->service_name);
-        safe_free(&icon->icon_name);
-        safe_free(&icon->title);
-        free(icon);
+    if (!icon->app_id || !icon->service_name || !icon->icon_name ||
+        !icon->title) {
+        fprintf(stderr, "Error: OOM during the icon creation\n");
+        stray_destroy(icon);
         return NULL;
     }
 
@@ -1664,7 +1663,7 @@ static TrayMenuItem *create_menu_item(
     item->icon_name = NULL;
 
     if (label) {
-        item->label = strdup(label);
+        item->label = safe_strdup(label);
         if (!item->label) {
             free(item);
             return NULL;
@@ -1847,7 +1846,7 @@ void stray_menu_set_item_label(TrayMenu *menu, int item_id, const char *label) {
     if (item) {
         char *new_label;
 
-        new_label = label ? strdup(label) : NULL;
+        new_label = label ? safe_strdup(label) : NULL;
 
         if (label && !new_label) return;
 
@@ -1880,7 +1879,7 @@ void stray_menu_set_item_icon(
     }
 
     if (item) {
-        char *new_icon_name = icon_name ? strdup(icon_name) : NULL;
+        char *new_icon_name = icon_name ? safe_strdup(icon_name) : NULL;
 
         if (icon_name && !new_icon_name) return;
 
