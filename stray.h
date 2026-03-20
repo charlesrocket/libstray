@@ -1647,6 +1647,7 @@ void stray_set_status(TrayIcon *icon, TrayStatus status) {
                 &args, DBUS_TYPE_STRING, &status_str);
 
             dbus_connection_send(icon->conn, msg, NULL);
+            dbus_connection_flush(icon->conn);
             dbus_message_unref(msg);
         }
 
