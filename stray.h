@@ -13,7 +13,7 @@ extern "C" {
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
 
 #define STRAY_OBJECT_PATH        "/StatusNotifierItem"
@@ -203,7 +203,7 @@ struct TrayIcon {
     TrayButtonCallback button_callback;
     TrayScrollCallback scroll_callback;
 
-    void *user_data;
+    void *click_user_data;
     void *button_user_data;
     void *scroll_user_data;
 
@@ -1252,7 +1252,7 @@ message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
                         STRAY_BUTTON_LEFT, (int)x, (int)y,
                         icon->button_user_data);
                 } else if (icon->click_callback)
-                    icon->click_callback((int)x, (int)y, icon->user_data);
+                    icon->click_callback((int)x, (int)y, icon->click_user_data);
 
             } else if (strcmp(member, "SecondaryActivate") == 0) {
                 /* middle click */
@@ -1421,7 +1421,7 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
     icon->click_callback = NULL;
     icon->button_callback = NULL;
     icon->scroll_callback = NULL;
-    icon->user_data = NULL;
+    icon->click_user_data = NULL;
     icon->button_user_data = NULL;
     icon->scroll_user_data = NULL;
     icon->icon_pixmaps = NULL;
@@ -1539,7 +1539,7 @@ void stray_set_click_callback(
     TrayIcon *icon, TrayClickCallback callback, void *user_data) {
     if (icon) {
         icon->click_callback = callback;
-        icon->user_data = user_data;
+        icon->click_user_data = user_data;
     }
 }
 
