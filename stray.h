@@ -113,7 +113,7 @@ void stray_set_window_id(TrayIcon *icon, dbus_uint32_t window_id);
 void stray_destroy(TrayIcon *icon);
 /* Registers with D-Bus */
 int stray_register(TrayIcon *icon);
-/* Returns a D-Bus file descriptor */
+/* Returns the Unix file descriptor for the D-Bus connection */
 int stray_get_fd(TrayIcon *icon);
 
 /* Menu API */

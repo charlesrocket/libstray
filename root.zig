@@ -241,7 +241,7 @@ pub const Icon = struct {
         c.stray_set_scroll_callback(self.handle, Wrapper.call, ctx);
     }
 
-    /// Returns the underlying D-Bus file descriptor.
+    /// Returns the underlying Unix file descriptor for the D-Bus connection.
     pub fn fd(self: Icon) !i32 {
         const result = c.stray_get_fd(self.handle);
         if (result < 0) return error.GetFdFailed;
