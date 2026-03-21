@@ -6,7 +6,10 @@ IndentCaseBlocks: true
 IndentGotoLabels: true
 IncludeBlocks: Regroup
 ColumnLimit: 80
+PointerAlignment: Right
 MaxEmptyLinesToKeep: 1
+BreakBeforeBinaryOperators: NonAssignment
+AlignOperands: AlignAfterOperator
 AlignConsecutiveMacros: AcrossEmptyLinesAndComments
 AlignArrayOfStructures: Left
 AlignAfterOpenBracket: Align

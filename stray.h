@@ -583,8 +583,8 @@ static void add_menu_item_properties(DBusMessageIter *props,
                        &children_display);
     }
 
-    if (item->type == STRAY_MENU_ITEM_CHECK ||
-        item->type == STRAY_MENU_ITEM_RADIO) {
+    if (item->type == STRAY_MENU_ITEM_CHECK
+        || item->type == STRAY_MENU_ITEM_RADIO) {
         dbus_int32_t toggle_state;
 
         const char *toggle_type =
@@ -1044,12 +1044,12 @@ static DBusHandlerResult handle_menu_get_group_properties(DBusConnection *conn,
     dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "(ia{sv})",
                                      &props_array);
 
-    if (dbus_message_iter_init(msg, &iter) &&
-        dbus_message_iter_get_arg_type(&iter) == DBUS_TYPE_ARRAY) {
+    if (dbus_message_iter_init(msg, &iter)
+        && dbus_message_iter_get_arg_type(&iter) == DBUS_TYPE_ARRAY) {
         dbus_message_iter_recurse(&iter, &id_array_iter);
 
-        while (dbus_message_iter_get_arg_type(&id_array_iter) ==
-               DBUS_TYPE_INT32) {
+        while (dbus_message_iter_get_arg_type(&id_array_iter)
+               == DBUS_TYPE_INT32) {
             dbus_int32_t id;
             DBusMessageIter tuple, item_props;
 
@@ -1093,8 +1093,7 @@ static DBusHandlerResult menu_message_handler(DBusConnection *conn,
     interface = dbus_message_get_interface(msg);
     member = dbus_message_get_member(msg);
 
-    if (interface &&
-        strcmp(interface, "org.freedesktop.DBus.Properties") == 0) {
+    if (interface && strcmp(interface, "org.freedesktop.DBus.Properties") == 0) {
         if (strcmp(member, "GetAll") == 0) {
             DBusMessage *reply = dbus_message_new_method_return(msg);
             if (reply) {
@@ -1217,9 +1216,9 @@ static DBusHandlerResult message_handler(DBusConnection *conn, DBusMessage *msg,
     if (strcmp(interface, STRAY_INTERFACE_NAME) == 0) {
         DBusMessage *reply = NULL;
 
-        if (strcmp(member, "Activate") == 0 ||
-            strcmp(member, "SecondaryActivate") == 0 ||
-            strcmp(member, "ContextMenu") == 0) {
+        if (strcmp(member, "Activate") == 0
+            || strcmp(member, "SecondaryActivate") == 0
+            || strcmp(member, "ContextMenu") == 0) {
 
             dbus_int32_t x = 0, y = 0;
             DBusMessageIter iter;
@@ -1263,8 +1262,8 @@ static DBusHandlerResult message_handler(DBusConnection *conn, DBusMessage *msg,
             dbus_int32_t delta = 0;
             const char *orientation = NULL;
 
-            if (dbus_message_iter_init(msg, &iter) &&
-                dbus_message_iter_get_arg_type(&iter) == DBUS_TYPE_INT32) {
+            if (dbus_message_iter_init(msg, &iter)
+                && dbus_message_iter_get_arg_type(&iter) == DBUS_TYPE_INT32) {
 
                 dbus_message_iter_get_basic(&iter, &delta);
                 dbus_message_iter_next(&iter);
@@ -1319,8 +1318,8 @@ static void process_events_with_timeout(DBusConnection *conn, int timeout_ms) {
         DBusDispatchStatus status;
 
         clock_gettime(CLOCK_MONOTONIC, &current_time);
-        elapsed_ms = (current_time.tv_sec - start_time.tv_sec) * 1000 +
-                     (current_time.tv_nsec - start_time.tv_nsec) / 1000000;
+        elapsed_ms = (current_time.tv_sec - start_time.tv_sec) * 1000
+                   + (current_time.tv_nsec - start_time.tv_nsec) / 1000000;
 
         if (elapsed_ms >= timeout_ms) break;
 
@@ -1413,8 +1412,8 @@ TrayIcon *stray_create(const char *app_name, const char *icon_name,
     icon->icon_pixmaps = NULL;
     icon->icon_pixmap_count = 0;
 
-    if (!icon->app_id || !icon->service_name || !icon->icon_name ||
-        !icon->title) {
+    if (!icon->app_id || !icon->service_name || !icon->icon_name
+        || !icon->title) {
         fprintf(stderr, "Error: OOM during the icon creation\n");
         stray_destroy(icon);
         return NULL;
@@ -1453,16 +1452,16 @@ static DBusHandlerResult connection_filter(DBusConnection *conn,
 
     if (!interface || !member) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-    if (strcmp(interface, "org.freedesktop.DBus") == 0 &&
-        strcmp(member, "NameOwnerChanged") == 0) {
+    if (strcmp(interface, "org.freedesktop.DBus") == 0
+        && strcmp(member, "NameOwnerChanged") == 0) {
         const char *name = NULL, *old_owner = NULL, *new_owner = NULL;
 
         dbus_message_get_args(msg, NULL, DBUS_TYPE_STRING, &name,
                               DBUS_TYPE_STRING, &old_owner, DBUS_TYPE_STRING,
                               &new_owner, DBUS_TYPE_INVALID);
 
-        if (name && strcmp(name, STRAY_WATCHER_SERVICE) == 0 && new_owner &&
-            strlen(new_owner) > 0) {
+        if (name && strcmp(name, STRAY_WATCHER_SERVICE) == 0 && new_owner
+            && strlen(new_owner) > 0) {
             if (register_with_watcher(icon->conn, icon->service_name))
                 icon->registered = 1;
 
