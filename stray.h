@@ -488,13 +488,6 @@ static void stray_free_icon_pixmap(TrayIcon *icon) {
     icon->icon_pixmap_count = 0;
 }
 
-static void stray_clear_icon_pixmap(TrayIcon *icon) {
-    if (!icon) return;
-    stray_free_icon_pixmap(icon);
-    emit_signal(icon, "NewIcon");
-    emit_properties_changed(icon, "IconPixmap");
-}
-
 static TrayMenuItem *find_menu_item(TrayMenu *menu, dbus_int32_t id) {
     int i;
 
@@ -1602,7 +1595,7 @@ void stray_set_icon_pixmap(
     TrayIcon *icon, int width, int height, const uint32_t *data) {
     if (!icon) return;
 
-    stray_clear_icon_pixmap(icon);
+    stray_free_icon_pixmap(icon);
 
     if (data && width > 0 && height > 0) {
         size_t data_size;
