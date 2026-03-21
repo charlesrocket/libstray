@@ -1766,6 +1766,8 @@ int stray_menu_add_item(TrayMenu *menu, const char *label,
     item = create_menu_item(menu, label, STRAY_MENU_ITEM_NORMAL, callback,
                             user_data);
 
+    if (!item) return -1;
+
     signal_layout_update(menu);
     return item ? item->id : -1;
 }
@@ -1776,6 +1778,8 @@ int stray_menu_add_separator(TrayMenu *menu) {
     if (!menu) return -1;
 
     item = create_menu_item(menu, NULL, STRAY_MENU_ITEM_SEPARATOR, NULL, NULL);
+
+    if (!item) return -1;
 
     signal_layout_update(menu);
     return item ? item->id : -1;
@@ -1789,6 +1793,7 @@ int stray_menu_add_check_item(TrayMenu *menu, const char *label,
 
     item = create_menu_item(menu, label, STRAY_MENU_ITEM_CHECK, callback,
                             user_data);
+    if (!item) return -1;
 
     signal_layout_update(menu);
     return item ? item->id : -1;
@@ -1802,6 +1807,8 @@ int stray_menu_add_radio_item(TrayMenu *menu, const char *label,
 
     item = create_menu_item(menu, label, STRAY_MENU_ITEM_RADIO, callback,
                             user_data);
+
+    if (!item) return -1;
 
     signal_layout_update(menu);
     return item ? item->id : -1;
