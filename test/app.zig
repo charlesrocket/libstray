@@ -44,6 +44,8 @@ pub fn main() !void {
     _ = try icon.register();
 
     icon.setWindowId(13);
+    try icon.setClickCallback(onClick, null);
+    try icon.setScrollCallback(onScroll, null);
 
     const custom_icon = try createCustomIcon(allocator);
     defer allocator.free(custom_icon);
@@ -67,6 +69,23 @@ fn onClick(x: i32, y: i32, user_data: ?*anyopaque) void {
     _ = y;
 
     std.debug.print("Tray icon clicked!\n", .{});
+}
+
+fn onScroll(
+    direction: stray.ScrollDirection,
+    delta: i32,
+    user_data: ?*anyopaque,
+) void {
+    _ = user_data;
+
+    const dir_str: []const u8 = switch (direction) {
+        .up => "up",
+        .down => "down",
+        .left => "left",
+        .right => "right",
+    };
+
+    std.debug.print("Scroll {s} delta={d}\n", .{ dir_str, delta });
 }
 
 fn onCheck(menu_id: i32, user_data: ?*anyopaque) void {
