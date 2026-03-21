@@ -289,6 +289,11 @@ pub const Icon = struct {
         );
     }
 
+    /// Sets the window ID for the tray icon.
+    pub fn setWindowId(self: *Icon, window_id: u32) void {
+        c.stray_set_window_id(self.handle, window_id);
+    }
+
     /// Sets the icon using pixmap data.
     /// The icon takes ownership of the pixmaps.
     pub fn setIconPixmap(

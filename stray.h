@@ -107,6 +107,8 @@ void stray_set_icon_pixmap(
     TrayIcon *icon, int width, int height, const uint32_t *data);
 /* Sets the tooltip. */
 void stray_set_tooltip(TrayIcon *icon, const char *title, const char *text);
+/* Sets the window ID for the icon. */
+void stray_set_window_id(TrayIcon *icon, dbus_uint32_t window_id);
 /* Destroys the icon and its content, then unregisters from D-Bus */
 void stray_destroy(TrayIcon *icon);
 /* Registers with D-Bus */
@@ -167,8 +169,10 @@ struct TrayMenuItem {
     int id;
     char *label;
     char *icon_name;
+
     dbus_bool_t enabled;
     dbus_bool_t checked;
+
     void *user_data;
 };
 
@@ -176,10 +180,12 @@ struct TrayMenu {
     TrayMenuItem **items;
     TrayMenu *parent;
     TrayIcon *icon;
+
     int item_count;
     int item_capacity;
     int next_id;
     int *next_id_ptr;
+
     dbus_uint32_t revision;
 };
 
@@ -204,6 +210,8 @@ struct TrayIcon {
 
     int registered;
     int icon_pixmap_count;
+
+    dbus_uint32_t window_id;
 
     StrayPixmap *icon_pixmaps;
     DBusConnection *conn;
@@ -418,6 +426,12 @@ static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
         dbus_message_iter_close_container(&changed_props, &dict_entry);
     }
 
+    if (all || strcmp(property_name, "WindowId") == 0) {
+        add_dict_entry(
+            &changed_props, "WindowId", DBUS_TYPE_UINT32, "u",
+            &icon->window_id);
+    }
+
     dbus_message_iter_close_container(&args, &changed_props);
     dbus_message_iter_open_container(
         &args, DBUS_TYPE_ARRAY, "s", &invalidated_props);
@@ -617,12 +631,13 @@ static void emit_menu_items_updated(TrayIcon *icon, int *item_ids, int count) {
 static void get_icon_properties(
     TrayIcon *icon, const char **out_icon, const char **out_title,
     const char **out_menu, dbus_bool_t *out_is_menu, const char **out_id,
-    const char **out_status) {
+    const char **out_status, dbus_uint32_t *out_window_id) {
     *out_icon = icon->icon_name ? icon->icon_name : STRAY_DEFAULT_ICON;
     *out_title = icon->title ? icon->title : STRAY_DEFAULT_TITLE;
     *out_menu = icon->menu ? STRAY_MENU_OBJECT_PATH : "/NO_DBUSMENU";
     *out_is_menu = (icon->menu != NULL);
     *out_id = icon->app_id ? icon->app_id : STRAY_DEFAULT_ID;
+    *out_window_id = icon->window_id;
 
     switch (icon->status) {
         case STRAY_STATUS_PASSIVE:
@@ -650,13 +665,14 @@ static void handle_property_get_all(
     const char *prop_pixmap;
     const char *prop_tooltip;
     dbus_bool_t item_is_menu;
+    dbus_uint32_t window_id;
 
     DBusMessage *reply = dbus_message_new_method_return(msg);
     if (!reply) return;
 
     get_icon_properties(
         icon, &current_icon, &current_title, &menu_path, &item_is_menu, &id_str,
-        &status_str);
+        &status_str, &window_id);
 
     dbus_message_iter_init_append(reply, &args);
     dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "{sv}", &array);
@@ -671,6 +687,7 @@ static void handle_property_get_all(
     add_dict_entry(&array, "Status", DBUS_TYPE_STRING, "s", &status_str);
     add_dict_entry(&array, "IconName", DBUS_TYPE_STRING, "s", &current_icon);
     add_dict_entry(&array, "IconThemePath", DBUS_TYPE_STRING, "s", &empty_str);
+    add_dict_entry(&array, "WindowId", DBUS_TYPE_UINT32, "u", &icon->window_id);
 
     /* add IconPixmap property */
     prop_pixmap = "IconPixmap";
@@ -729,12 +746,13 @@ static void handle_property_get(
     const char *status_str;
     const char *theme_path;
     dbus_bool_t item_is_menu;
+    dbus_uint32_t window_id;
 
     if (!reply) return;
 
     get_icon_properties(
         icon, &current_icon, &current_title, &menu_path, &item_is_menu, &id_str,
-        &status_str);
+        &status_str, &window_id);
 
     dbus_message_iter_init_append(reply, &args);
 
@@ -779,6 +797,8 @@ static void handle_property_get(
 
         add_tooltip_struct(&variant, icon);
         dbus_message_iter_close_container(&args, &variant);
+    } else if (strcmp(prop, "WindowId") == 0) {
+        add_variant(&args, DBUS_TYPE_UINT32, "u", &icon->window_id);
     } else {
         DBusMessage *error = dbus_message_new_error(
             msg, "org.freedesktop.DBus.Error.InvalidArgs",
@@ -1370,6 +1390,7 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
     icon->app_id = safe_strdup(app_name);
     icon->service_name = safe_strdup(service_name);
     icon->status = STRAY_STATUS_ACTIVE;
+    icon->window_id = 0;
     icon->icon_name = safe_strdup(icon_name ? icon_name : STRAY_DEFAULT_ICON);
     icon->title = safe_strdup(title ? title : app_name);
     icon->tooltip_title = NULL;
@@ -1564,6 +1585,12 @@ void stray_set_tooltip(TrayIcon *icon, const char *title, const char *text) {
 
     emit_signal(icon, "NewToolTip");
     emit_properties_changed(icon, "ToolTip");
+}
+
+void stray_set_window_id(TrayIcon *icon, dbus_uint32_t window_id) {
+    if (!icon) return;
+    icon->window_id = window_id;
+    emit_properties_changed(icon, "WindowId");
 }
 
 void stray_set_icon_pixmap(

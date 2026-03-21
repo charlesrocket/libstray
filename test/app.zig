@@ -43,6 +43,8 @@ pub fn main() !void {
     // TODO set up D-Bus CI session
     _ = try icon.register();
 
+    icon.setWindowId(13);
+
     const custom_icon = try createCustomIcon(allocator);
     defer allocator.free(custom_icon);
 
