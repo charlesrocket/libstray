@@ -325,6 +325,32 @@ static void add_tooltip_struct(DBusMessageIter *variant, TrayIcon *icon) {
     dbus_message_iter_close_container(variant, &struct_iter);
 }
 
+static void get_icon_properties(
+    TrayIcon *icon, const char **out_icon, const char **out_title,
+    const char **out_menu, dbus_bool_t *out_is_menu, const char **out_id,
+    const char **out_status, dbus_uint32_t *out_window_id) {
+    *out_icon = icon->icon_name ? icon->icon_name : STRAY_DEFAULT_ICON;
+    *out_title = icon->title ? icon->title : STRAY_DEFAULT_TITLE;
+    *out_menu = icon->menu ? STRAY_MENU_OBJECT_PATH : "/NO_DBUSMENU";
+    *out_is_menu = (icon->menu != NULL);
+    *out_id = icon->app_id ? icon->app_id : STRAY_DEFAULT_ID;
+    *out_window_id = icon->window_id;
+
+    switch (icon->status) {
+        case STRAY_STATUS_PASSIVE:
+            *out_status = "Passive";
+            break;
+        case STRAY_STATUS_ACTIVE:
+            *out_status = "Active";
+            break;
+        case STRAY_STATUS_NEEDS_ATTENTION:
+            *out_status = "NeedsAttention";
+            break;
+        default:
+            *out_status = "Active";
+    }
+}
+
 static void emit_signal(TrayIcon *icon, const char *signal_name) {
     DBusMessage *msg;
 
@@ -346,9 +372,12 @@ static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
     const char *current_title;
     const char *menu_path;
     const char *id_str;
+    const char *status_str;
+    const char *empty_str;
     DBusMessageIter args, changed_props, invalidated_props;
     DBusMessage *msg;
     dbus_bool_t item_is_menu;
+    dbus_uint32_t window_id;
     int all;
 
     if (!icon) return;
@@ -359,15 +388,12 @@ static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
 
     if (!msg) return;
 
+    get_icon_properties(
+        icon, &current_icon, &current_title, &menu_path, &item_is_menu, &id_str,
+        &status_str, &window_id);
+
     interface = STRAY_INTERFACE_NAME;
-    current_icon = icon->icon_name ? icon->icon_name : STRAY_DEFAULT_ICON;
-
-    current_title = icon->title ? icon->title : STRAY_DEFAULT_TITLE;
-    menu_path = icon->menu ? STRAY_MENU_OBJECT_PATH : "/NO_DBUSMENU";
-
-    id_str = icon->app_id ? icon->app_id : STRAY_DEFAULT_ID;
-
-    item_is_menu = (icon->menu != NULL);
+    empty_str = "";
 
     dbus_message_iter_init_append(msg, &args);
     dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, &interface);
@@ -395,6 +421,14 @@ static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
 
     if (all || strcmp(property_name, "Id") == 0)
         add_dict_entry(&changed_props, "Id", DBUS_TYPE_STRING, "s", &id_str);
+
+    if (all || strcmp(property_name, "Status") == 0)
+        add_dict_entry(
+            &changed_props, "Status", DBUS_TYPE_STRING, "s", &status_str);
+
+    if (all || strcmp(property_name, "WindowId") == 0)
+        add_dict_entry(
+            &changed_props, "WindowId", DBUS_TYPE_UINT32, "u", &window_id);
 
     if (all || strcmp(property_name, "IconPixmap") == 0) {
         const char *key = "IconPixmap";
@@ -626,32 +660,6 @@ static void emit_menu_items_updated(TrayIcon *icon, int *item_ids, int count) {
     dbus_connection_send(icon->conn, msg, NULL);
     dbus_connection_flush(icon->conn);
     dbus_message_unref(msg);
-}
-
-static void get_icon_properties(
-    TrayIcon *icon, const char **out_icon, const char **out_title,
-    const char **out_menu, dbus_bool_t *out_is_menu, const char **out_id,
-    const char **out_status, dbus_uint32_t *out_window_id) {
-    *out_icon = icon->icon_name ? icon->icon_name : STRAY_DEFAULT_ICON;
-    *out_title = icon->title ? icon->title : STRAY_DEFAULT_TITLE;
-    *out_menu = icon->menu ? STRAY_MENU_OBJECT_PATH : "/NO_DBUSMENU";
-    *out_is_menu = (icon->menu != NULL);
-    *out_id = icon->app_id ? icon->app_id : STRAY_DEFAULT_ID;
-    *out_window_id = icon->window_id;
-
-    switch (icon->status) {
-        case STRAY_STATUS_PASSIVE:
-            *out_status = "Passive";
-            break;
-        case STRAY_STATUS_ACTIVE:
-            *out_status = "Active";
-            break;
-        case STRAY_STATUS_NEEDS_ATTENTION:
-            *out_status = "NeedsAttention";
-            break;
-        default:
-            *out_status = "Active";
-    }
 }
 
 static void handle_property_get_all(
