@@ -183,7 +183,6 @@ struct TrayMenu {
 
     int item_count;
     int item_capacity;
-    int next_id;
     int *next_id_ptr;
 
     dbus_uint32_t revision;
@@ -227,6 +226,7 @@ static void safe_free(char **str) {
 }
 
 static int stray_instance_counter = 0;
+static int stray_global_menu_next_id = 1;
 
 int stray_get_fd(TrayIcon *icon) {
     int fd = -1;
@@ -937,16 +937,42 @@ handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
             find_menu_item_recursive(icon->menu, parent_id);
 
         if (!parent_item || !parent_item->submenu) {
-            return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+            reply = dbus_message_new_method_return(msg);
+            if (!reply) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+
+            revision = icon->menu->revision;
+
+            dbus_message_iter_init_append(reply, &args);
+            dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, &revision);
+            dbus_message_iter_open_container(
+                &args, DBUS_TYPE_STRUCT, NULL, &root_struct);
+
+            dbus_message_iter_append_basic(
+                &root_struct, DBUS_TYPE_INT32, &parent_id);
+
+            dbus_message_iter_open_container(
+                &root_struct, DBUS_TYPE_ARRAY, "{sv}", &root_props);
+
+            dbus_message_iter_close_container(&root_struct, &root_props);
+            dbus_message_iter_open_container(
+                &root_struct, DBUS_TYPE_ARRAY, "v", &root_children);
+
+            dbus_message_iter_close_container(&root_struct, &root_children);
+            dbus_message_iter_close_container(&args, &root_struct);
+            dbus_connection_send(conn, reply, NULL);
+            dbus_connection_flush(conn);
+            dbus_message_unref(reply);
+
+            return DBUS_HANDLER_RESULT_HANDLED;
         }
 
         target_menu = parent_item->submenu;
     }
 
     reply = dbus_message_new_method_return(msg);
-    revision = target_menu->revision;
-
     if (!reply) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+
+    revision = target_menu->revision;
 
     dbus_message_iter_init_append(reply, &args);
     dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, &revision);
@@ -1033,26 +1059,24 @@ static DBusHandlerResult handle_menu_get_group_properties(
 
         while (dbus_message_iter_get_arg_type(&id_array_iter) ==
                DBUS_TYPE_INT32) {
-            TrayMenuItem *item;
             dbus_int32_t id;
+            DBusMessageIter tuple, item_props;
 
             dbus_message_iter_get_basic(&id_array_iter, &id);
-            item = find_menu_item_recursive(icon->menu, id);
+            dbus_message_iter_open_container(
+                &props_array, DBUS_TYPE_STRUCT, NULL, &tuple);
 
-            if (item) {
-                DBusMessageIter tuple, item_props;
-                dbus_message_iter_open_container(
-                    &props_array, DBUS_TYPE_STRUCT, NULL, &tuple);
+            dbus_message_iter_append_basic(&tuple, DBUS_TYPE_INT32, &id);
+            dbus_message_iter_open_container(
+                &tuple, DBUS_TYPE_ARRAY, "{sv}", &item_props);
 
-                dbus_message_iter_append_basic(&tuple, DBUS_TYPE_INT32, &id);
-                dbus_message_iter_open_container(
-                    &tuple, DBUS_TYPE_ARRAY, "{sv}", &item_props);
-
-                add_menu_item_properties(&item_props, item);
-
-                dbus_message_iter_close_container(&tuple, &item_props);
-                dbus_message_iter_close_container(&props_array, &tuple);
+            if (id != 0) {
+                TrayMenuItem *item = find_menu_item_recursive(icon->menu, id);
+                if (item) add_menu_item_properties(&item_props, item);
             }
+
+            dbus_message_iter_close_container(&tuple, &item_props);
+            dbus_message_iter_close_container(&props_array, &tuple);
 
             dbus_message_iter_next(&id_array_iter);
         }
@@ -1632,8 +1656,7 @@ TrayMenu *stray_menu_create(void) {
 
     if (menu) {
         int i;
-        menu->next_id = 1;
-        menu->next_id_ptr = &menu->next_id;
+        menu->next_id_ptr = &stray_global_menu_next_id;
         menu->item_count = 0;
         menu->item_capacity = 8;
         menu->items = calloc(menu->item_capacity, sizeof(TrayMenuItem *));
