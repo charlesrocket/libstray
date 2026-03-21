@@ -455,11 +455,6 @@ static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
         dbus_message_iter_close_container(&changed_props, &dict_entry);
     }
 
-    if (all || strcmp(property_name, "WindowId") == 0) {
-        add_dict_entry(&changed_props, "WindowId", DBUS_TYPE_UINT32, "u",
-                       &icon->window_id);
-    }
-
     dbus_message_iter_close_container(&args, &changed_props);
     dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "s",
                                      &invalidated_props);
