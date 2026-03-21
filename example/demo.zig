@@ -91,13 +91,18 @@ pub fn main() !void {
     tooltip_ctx.item_id = tooltip_item;
 
     var pixmap_ctx = Context{ .icon = &icon };
-    const pixmap_item = try menu.addItem(
+    _ = try menu.addItem(
         "Set custom Pixmap",
         onCustomPixmap,
         &pixmap_ctx,
     );
 
-    pixmap_ctx.item_id = pixmap_item;
+    var named_ctx = Context{ .icon = &icon };
+    _ = try menu.addItem(
+        "Set named icon",
+        onRemovePixmap,
+        &named_ctx,
+    );
 
     _ = try menu.addSeparator();
 
@@ -239,7 +244,15 @@ fn onCustomPixmap(menu_id: i32, user_data: ?*anyopaque) void {
 
     defer ctx.icon.allocator.free(custom_icon);
     ctx.icon.setIconPixmap(16, 16, custom_icon) catch return;
-    ctx.icon.setMenuItemEnabled(ctx.item_id.?, false);
+}
+
+fn onRemovePixmap(menu_id: i32, user_data: ?*anyopaque) void {
+    _ = menu_id;
+
+    std.debug.print("Switching back to a named icon\n", .{});
+    const ctx = @as(*Context, @ptrCast(@alignCast(user_data.?)));
+
+    ctx.icon.setIcon("starred") catch return;
 }
 
 fn onChange(menu_id: i32, user_data: ?*anyopaque) void {
