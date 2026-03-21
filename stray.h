@@ -1303,34 +1303,31 @@ message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
 }
 
 static void process_events_with_timeout(DBusConnection *conn, int timeout_ms) {
+    struct timespec start_time, current_time;
     long elapsed_ms;
     int remaining_ms;
-    struct timeval start_time, current_time;
 
-    gettimeofday(&start_time, NULL);
+    if (!conn) return;
+
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
 
     while (1) {
         DBusDispatchStatus status;
-        gettimeofday(&current_time, NULL);
+
+        clock_gettime(CLOCK_MONOTONIC, &current_time);
         elapsed_ms = (current_time.tv_sec - start_time.tv_sec) * 1000 +
-                     (current_time.tv_usec - start_time.tv_usec) / 1000;
+                     (current_time.tv_nsec - start_time.tv_nsec) / 1000000;
 
         if (elapsed_ms >= timeout_ms) break;
 
-        remaining_ms = timeout_ms - elapsed_ms;
-        /* process events with the remaining timeout */
+        remaining_ms = timeout_ms - (int)elapsed_ms;
         dbus_connection_read_write(conn, remaining_ms);
 
-        /* do not stop processing to catch any follow-ups */
         do {
             status = dbus_connection_dispatch(conn);
         } while (status == DBUS_DISPATCH_DATA_REMAINS);
 
-        if (status == DBUS_DISPATCH_COMPLETE)
-            /* 10ms to allow batched messages */
-            usleep(10000);
-        else
-            break;
+        if (status == DBUS_DISPATCH_NEED_MEMORY) break;
     }
 }
 
