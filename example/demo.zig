@@ -171,7 +171,7 @@ pub fn main() !void {
     // main event loop
     while (is_active) {
         // toggle the checked item state
-        icon.setMenuItemChecked(checked_item, !is_checked);
+        icon.setMenuItemChecked(checked_item, is_checked);
 
         // update radio states based on current selection
         icon.setMenuItemChecked(
