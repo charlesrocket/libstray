@@ -205,6 +205,8 @@ struct TrayIcon {
     void *scroll_user_data;
 
     int registered;
+    int filter_added;
+    int match_added;
     int icon_pixmap_count;
 
     dbus_uint32_t window_id;
@@ -1489,24 +1491,28 @@ int stray_register(TrayIcon *icon) {
         return 0;
     }
 
-    dbus_connection_add_filter(icon->conn, connection_filter, icon, NULL);
+    icon->match_added = 1;
 
-    if (!watcher_exists(icon->conn)) return 0;
-
-    emit_properties_changed(icon, "All");
-    process_events_with_timeout(icon->conn, 100);
-
-    if (!register_with_watcher(icon->conn, icon->service_name)) {
-        dbus_connection_remove_filter(icon->conn, connection_filter, icon);
+    if (!dbus_connection_add_filter(icon->conn, connection_filter, icon,
+                                    NULL)) {
         dbus_bus_remove_match(icon->conn,
                               "type='signal',"
                               "interface='org.freedesktop.DBus',"
                               "member='NameOwnerChanged',"
                               "arg0='" STRAY_WATCHER_SERVICE "'",
                               NULL);
-
+        icon->match_added = 0;
         return 0;
     }
+
+    icon->filter_added = 1;
+
+    if (!watcher_exists(icon->conn)) return 0;
+
+    emit_properties_changed(icon, "All");
+    process_events_with_timeout(icon->conn, 100);
+
+    if (!register_with_watcher(icon->conn, icon->service_name)) { return 0; }
 
     process_events_with_timeout(icon->conn, 100);
     icon->registered = 1;
@@ -2009,8 +2015,12 @@ void stray_set_menu(TrayIcon *icon, TrayMenu *menu) {
 void stray_destroy(TrayIcon *icon) {
     if (!icon) return;
 
-    if (icon->registered) {
+    if (icon->filter_added) {
         dbus_connection_remove_filter(icon->conn, connection_filter, icon);
+        icon->filter_added = 0;
+    }
+
+    if (icon->match_added) {
         dbus_bus_remove_match(icon->conn,
                               "type='signal',"
                               "interface='org.freedesktop.DBus',"
@@ -2018,27 +2028,27 @@ void stray_destroy(TrayIcon *icon) {
                               "arg0='" STRAY_WATCHER_SERVICE "'",
                               NULL);
 
+        icon->match_added = 0;
+    }
+
+    if (icon->registered) {
         dbus_bus_release_name(icon->conn, icon->service_name, NULL);
         dbus_connection_flush(icon->conn);
         process_events_with_timeout(icon->conn, 200);
         icon->registered = 0;
     }
 
-    /* free the pixmap */
     stray_free_icon_pixmap(icon);
 
-    /* destroy the menu */
     if (icon->menu) {
         icon->menu->icon = NULL;
         stray_menu_destroy(icon->menu);
         icon->menu = NULL;
     }
 
-    /* clear tooltip strings */
     safe_free(&icon->tooltip_title);
     safe_free(&icon->tooltip_text);
 
-    /* unregister from D-Bus */
     if (icon->conn) {
         dbus_connection_unregister_object_path(icon->conn, STRAY_OBJECT_PATH);
         dbus_connection_unregister_object_path(icon->conn,
