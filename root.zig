@@ -302,8 +302,6 @@ pub const Icon = struct {
         height: i32,
         data: []const u32,
     ) !void {
-        // clear the named icon so the system uses the pixmap instead
-        c.stray_set_icon(self.handle, "");
         c.stray_set_icon_pixmap(
             self.handle,
             width,
