@@ -1632,20 +1632,17 @@ void stray_set_icon_pixmap(TrayIcon *icon, int width, int height,
 TrayMenu *stray_menu_create(void) {
     TrayMenu *menu = calloc(1, sizeof(TrayMenu));
 
-    if (menu) {
-        int i;
-        menu->next_id_ptr = &stray_global_menu_next_id;
-        menu->item_count = 0;
-        menu->item_capacity = 8;
-        menu->items = calloc(menu->item_capacity, sizeof(TrayMenuItem *));
-        menu->icon = NULL;
-        menu->parent = NULL;
-        menu->revision = 1;
+    if (!menu) return NULL;
 
-        for (i = 0; i < menu->item_capacity; i++) {
-            menu->items[i] = NULL;
-        }
+    menu->items = calloc(8, sizeof(TrayMenuItem *));
+    if (!menu->items) {
+        free(menu);
+        return NULL;
     }
+
+    menu->item_capacity = 8;
+    menu->revision = 1;
+    menu->next_id_ptr = &stray_global_menu_next_id;
 
     return menu;
 }
