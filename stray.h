@@ -1562,7 +1562,7 @@ void stray_set_icon(TrayIcon *icon, const char *icon_name) {
     icon->icon_name = safe_strdup(icon_name ? icon_name : STRAY_DEFAULT_ICON);
     if (!icon->icon_name) return;
 
-    /* emit signals to notify about the change */
+    stray_free_icon_pixmap(icon);
     emit_signal(icon, "NewIcon");
     emit_properties_changed(icon, "IconName");
 }
@@ -1574,7 +1574,6 @@ void stray_set_title(TrayIcon *icon, const char *title) {
     icon->title = safe_strdup(title ? title : STRAY_DEFAULT_TITLE);
     if (!icon->title) return;
 
-    /* emit signals to notify about the change */
     emit_signal(icon, "NewTitle");
     emit_properties_changed(icon, "Title");
 }
@@ -1601,24 +1600,40 @@ void stray_set_window_id(TrayIcon *icon, dbus_uint32_t window_id) {
 
 void stray_set_icon_pixmap(TrayIcon *icon, int width, int height,
                            const uint32_t *data) {
+    size_t pixel_count = 0;
+    size_t data_size = 0;
+
     if (!icon) return;
 
-    stray_free_icon_pixmap(icon);
+    if (data && width > 0 && height > 0) {
+        pixel_count = (size_t)width * (size_t)height;
+        data_size = pixel_count * sizeof(uint32_t);
+
+        if (data_size >= DBUS_MAXIMUM_MESSAGE_LENGTH - 4096) {
+            fprintf(stderr,
+                    "Error: pixmap (%zu bytes) is "
+                    "too big for a D-Bus message\n",
+                    data_size);
+
+            return;
+        }
+    }
+
+    /* hosts prefer IconName over IconPixmap when both are set */
+    safe_free(&icon->icon_name);
+    icon->icon_name = safe_strdup("");
 
     if (data && width > 0 && height > 0) {
-        size_t data_size;
-
         icon->icon_pixmaps = malloc(sizeof(StrayPixmap));
         if (!icon->icon_pixmaps) return;
 
         icon->icon_pixmaps[0].width = width;
         icon->icon_pixmaps[0].height = height;
 
-        data_size = width * height * sizeof(uint32_t);
         icon->icon_pixmaps[0].data = malloc(data_size);
 
         if (icon->icon_pixmaps[0].data) {
-            size_t i, pixel_count = (size_t)width * height;
+            size_t i;
             for (i = 0; i < pixel_count; i++)
                 icon->icon_pixmaps[0].data[i] = htonl(data[i]);
 
@@ -1627,7 +1642,6 @@ void stray_set_icon_pixmap(TrayIcon *icon, int width, int height,
             free(icon->icon_pixmaps);
             icon->icon_pixmaps = NULL;
             icon->icon_pixmap_count = 0;
-            return;
         }
     }
 
