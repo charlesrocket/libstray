@@ -1834,12 +1834,6 @@ int stray_menu_add_submenu(TrayMenu *menu, const char *label,
     submenu->parent = menu;
     submenu->next_id_ptr = menu->next_id_ptr;
 
-    /* notify the system if we have an icon */
-    if (menu->icon) {
-        TrayIcon *icon = get_root_icon(menu);
-        if (icon) { emit_properties_changed(icon, "All"); }
-    }
-
     signal_layout_update(menu);
     return item->id;
 }
