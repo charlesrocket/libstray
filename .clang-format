@@ -9,7 +9,7 @@ ColumnLimit: 80
 MaxEmptyLinesToKeep: 1
 AlignConsecutiveMacros: AcrossEmptyLinesAndComments
 AlignArrayOfStructures: Left
-AlignAfterOpenBracket: AlwaysBreak
+AlignAfterOpenBracket: false
 AllowShortBlocksOnASingleLine: Always
 AllowAllArgumentsOnNextLine: true
 AllowAllParametersOfDeclarationOnNextLine: true
