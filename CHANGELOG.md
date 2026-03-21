@@ -2,6 +2,66 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-03-21
+
+### Bug Fixes
+
+- Update app layout
+- Improve submenu handling
+- Add test item
+- Change label
+- Check all strings in `stray_create`
+- Improve menu checks
+- Handle multiple instances
+- Improve scroll handling
+- Ensure `NewStatus` is flushed
+- Check message type in `register_with_watcher()`
+- Clean up `emit_properties_changed()`
+- Remove redundant signals from `stray_set_icon_pixmap()`
+- Use global menu id root
+- Drop redundant `WindowId`
+- Check `create_menu_item()`
+- Safeguard filter/match rule
+- Check pixmap size
+- Update `setIconPixmap()`
+- Correct checked item
+
+### Documentation
+
+- Update `fd()` description
+
+### Features
+
+- Add file descriptor
+- [**breaking**] Track registrations
+- [**breaking**] Add x/y callback coordinates
+- Add `onScroll`
+- Add `window_id`
+- Add `onRemovePixmap()`
+
+### Performance
+
+- Drop `usleep()`
+
+### Refactor
+
+- Move `*RadioGroup`
+- Improve `stray_destroy()` logic
+- Consistent user data fields
+- Drop redundant zeroing loop
+- Drop redundant `emit_properties_changed()`
+
+### Styling
+
+- Fix formatting
+- Disable `AlignAfterOpenBracket`
+- Align open brackets
+- Align operands
+
+### Testing
+
+- Add callbacks
+
 ## [0.3.2] - 2026-03-18
 
 ### Bug Fixes
