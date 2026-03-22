@@ -365,6 +365,25 @@ static void emit_signal(TrayIcon *icon, const char *signal_name) {
     }
 }
 
+static void emit_signal_string(TrayIcon *icon, const char *signal_name,
+                               const char *value) {
+    DBusMessage *msg;
+
+    if (!icon || !value) return;
+
+    msg = dbus_message_new_signal(STRAY_OBJECT_PATH, STRAY_INTERFACE_NAME,
+                                  signal_name);
+
+    if (msg) {
+        DBusMessageIter args;
+        dbus_message_iter_init_append(msg, &args);
+        dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, &value);
+        dbus_connection_send(icon->conn, msg, NULL);
+        dbus_connection_flush(icon->conn);
+        dbus_message_unref(msg);
+    }
+}
+
 static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
     const char *interface;
     const char *current_icon;
@@ -1689,20 +1708,7 @@ void stray_set_status(TrayIcon *icon, TrayStatus status) {
                 break;
         }
 
-        DBusMessage *msg = dbus_message_new_signal(
-            STRAY_OBJECT_PATH, STRAY_INTERFACE_NAME, "NewStatus");
-
-        if (msg) {
-            DBusMessageIter args;
-            dbus_message_iter_init_append(msg, &args);
-            dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING,
-                                           &status_str);
-
-            dbus_connection_send(icon->conn, msg, NULL);
-            dbus_connection_flush(icon->conn);
-            dbus_message_unref(msg);
-        }
-
+        emit_signal_string(icon, "NewStatus", status_str);
         emit_properties_changed(icon, "Status");
     }
 }
