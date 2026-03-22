@@ -11,9 +11,14 @@ MaxEmptyLinesToKeep: 1
 BreakBeforeBinaryOperators: NonAssignment
 AlignOperands: AlignAfterOperator
 AlignConsecutiveMacros: AcrossEmptyLinesAndComments
-AlignArrayOfStructures: Left
-AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignArrayOfStructures: Right
+AlignAfterOpenBracket: BlockIndent
 AllowShortBlocksOnASingleLine: Always
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortEnumsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: All
+AllowShortLoopsOnASingleLine: true
 AllowAllArgumentsOnNextLine: true
 AllowAllParametersOfDeclarationOnNextLine: true
 AllowShortIfStatementsOnASingleLine: WithoutElse
