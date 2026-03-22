@@ -1912,7 +1912,7 @@ int stray_menu_add_item(
     if (!item) return -1;
 
     signal_layout_update(menu);
-    return item ? item->id : -1;
+    return item->id;
 }
 
 int stray_menu_add_separator(TrayMenu *menu) {
@@ -1925,7 +1925,7 @@ int stray_menu_add_separator(TrayMenu *menu) {
     if (!item) return -1;
 
     signal_layout_update(menu);
-    return item ? item->id : -1;
+    return item->id;
 }
 
 int stray_menu_add_check_item(
@@ -1942,7 +1942,7 @@ int stray_menu_add_check_item(
     if (!item) return -1;
 
     signal_layout_update(menu);
-    return item ? item->id : -1;
+    return item->id;
 }
 
 int stray_menu_add_radio_item(
@@ -1960,7 +1960,7 @@ int stray_menu_add_radio_item(
     if (!item) return -1;
 
     signal_layout_update(menu);
-    return item ? item->id : -1;
+    return item->id;
 }
 
 int stray_menu_add_submenu(
