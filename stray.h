@@ -1636,33 +1636,34 @@ void stray_set_icon_pixmap(TrayIcon *icon, int width, int height,
 
             return;
         }
+
+        StrayPixmap *pixmap = malloc(sizeof(StrayPixmap));
+        if (!pixmap) return;
+
+        pixmap->width = width;
+        pixmap->height = height;
+        pixmap->data = malloc(data_size);
+
+        if (!pixmap->data) {
+            free(pixmap);
+            return;
+        }
+
+        /* convert to network byte order */
+        size_t i;
+        for (i = 0; i < pixel_count; i++)
+            pixmap->data[i] = htonl(data[i]);
+
+        stray_free_icon_pixmap(icon);
+        icon->icon_pixmaps = pixmap;
+        icon->icon_pixmap_count = 1;
+    } else {
+        stray_free_icon_pixmap(icon);
     }
 
     /* hosts prefer IconName over IconPixmap when both are set */
     safe_free(&icon->icon_name);
     icon->icon_name = safe_strdup("");
-
-    if (data && width > 0 && height > 0) {
-        icon->icon_pixmaps = malloc(sizeof(StrayPixmap));
-        if (!icon->icon_pixmaps) return;
-
-        icon->icon_pixmaps[0].width = width;
-        icon->icon_pixmaps[0].height = height;
-
-        icon->icon_pixmaps[0].data = malloc(data_size);
-
-        if (icon->icon_pixmaps[0].data) {
-            size_t i;
-            for (i = 0; i < pixel_count; i++)
-                icon->icon_pixmaps[0].data[i] = htonl(data[i]);
-
-            icon->icon_pixmap_count = 1;
-        } else {
-            free(icon->icon_pixmaps);
-            icon->icon_pixmaps = NULL;
-            icon->icon_pixmap_count = 0;
-        }
-    }
 
     emit_signal(icon, "NewIcon");
     emit_properties_changed(icon, "IconPixmap");
