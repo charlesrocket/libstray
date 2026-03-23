@@ -1894,6 +1894,16 @@ void signal_layout_update(TrayMenu *menu) {
     emit_layout_updated(icon, 0);
 }
 
+static void notify_item_changed(TrayMenu *menu, TrayIcon *icon, int item_id) {
+    if (icon) {
+        int ids[1];
+        ids[0] = item_id;
+        emit_menu_items_updated(icon, ids, 1);
+    } else {
+        signal_layout_update(menu);
+    }
+}
+
 int stray_menu_add_item(
     TrayMenu *menu, const char *label, TrayMenuCallback callback,
     void *user_data
@@ -2008,12 +2018,7 @@ void stray_menu_set_item_checked(
 
     if (item) {
         item->checked = checked;
-
-        if (icon) {
-            int ids[1];
-            ids[0] = item_id;
-            emit_menu_items_updated(icon, ids, 1);
-        }
+        notify_item_changed(menu, icon, item_id);
     }
 }
 
@@ -2035,12 +2040,7 @@ void stray_menu_set_item_enabled(
 
     if (item) {
         item->enabled = enabled;
-
-        if (icon) {
-            int ids[1];
-            ids[0] = item_id;
-            emit_menu_items_updated(icon, ids, 1);
-        }
+        notify_item_changed(menu, icon, item_id);
     }
 }
 
@@ -2067,14 +2067,7 @@ void stray_menu_set_item_label(TrayMenu *menu, int item_id, const char *label) {
 
         free(item->label);
         item->label = new_label;
-
-        if (icon) {
-            int ids[1];
-            ids[0] = item_id;
-            emit_menu_items_updated(icon, ids, 1);
-        } else {
-            signal_layout_update(menu);
-        }
+        notify_item_changed(menu, icon, item_id);
     }
 }
 
@@ -2101,14 +2094,7 @@ void stray_menu_set_item_icon(
 
         free(item->icon_name);
         item->icon_name = new_icon_name;
-
-        if (icon) {
-            int ids[1];
-            ids[0] = item_id;
-            emit_menu_items_updated(icon, ids, 1);
-        } else {
-            signal_layout_update(menu);
-        }
+        notify_item_changed(menu, icon, item_id);
     }
 }
 
