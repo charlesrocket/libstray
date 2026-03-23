@@ -533,20 +533,6 @@ static void stray_free_icon_pixmap(TrayIcon *icon) {
 
 static TrayMenuItem *find_menu_item(TrayMenu *menu, dbus_int32_t id) {
     int i;
-
-    if (!menu) return NULL;
-
-    for (i = 0; i < menu->item_count; i++) {
-        if (menu->items[i] && menu->items[i]->id == id) {
-            return menu->items[i];
-        }
-    }
-
-    return NULL;
-}
-
-static TrayMenuItem *find_menu_item_recursive(TrayMenu *menu, dbus_int32_t id) {
-    int i;
     TrayMenuItem *item;
 
     if (!menu) return NULL;
@@ -559,7 +545,7 @@ static TrayMenuItem *find_menu_item_recursive(TrayMenu *menu, dbus_int32_t id) {
 
         /* check submenu presence */
         if (menu->items[i] && menu->items[i]->submenu) {
-            item = find_menu_item_recursive(menu->items[i]->submenu, id);
+            item = find_menu_item(menu->items[i]->submenu, id);
             if (item) return item;
         }
     }
@@ -673,7 +659,7 @@ static void emit_menu_items_updated(TrayIcon *icon, int *item_ids, int count) {
 
     for (i = 0; i < count; i++) {
         /* find items in submenus */
-        TrayMenuItem *item = find_menu_item_recursive(icon->menu, item_ids[i]);
+        TrayMenuItem *item = find_menu_item(icon->menu, item_ids[i]);
 
         if (item) {
             DBusMessageIter item_struct, props_array;
@@ -1007,8 +993,7 @@ handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     if (parent_id == 0) {
         target_menu = icon->menu;
     } else {
-        TrayMenuItem *parent_item =
-            find_menu_item_recursive(icon->menu, parent_id);
+        TrayMenuItem *parent_item = find_menu_item(icon->menu, parent_id);
 
         if (!parent_item || !parent_item->submenu) {
             reply = dbus_message_new_method_return(msg);
@@ -1104,7 +1089,7 @@ handle_menu_event(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     dbus_message_iter_next(&iter); /* skip timestamp (u) */
 
     if (strcmp(type, "clicked") == 0) {
-        TrayMenuItem *item = find_menu_item_recursive(icon->menu, id);
+        TrayMenuItem *item = find_menu_item(icon->menu, id);
         if (item && item->callback) { item->callback(id, item->user_data); }
     }
 
@@ -1157,7 +1142,7 @@ static DBusHandlerResult handle_menu_get_group_properties(
             );
 
             if (id != 0) {
-                TrayMenuItem *item = find_menu_item_recursive(icon->menu, id);
+                TrayMenuItem *item = find_menu_item(icon->menu, id);
                 if (item) add_menu_item_properties(&item_props, item);
             }
 
@@ -2016,7 +2001,7 @@ void stray_menu_set_item_checked(
     icon = get_root_icon(menu);
 
     if (icon) {
-        item = find_menu_item_recursive(icon->menu, item_id);
+        item = find_menu_item(icon->menu, item_id);
     } else {
         item = find_menu_item(menu, item_id);
     }
@@ -2043,7 +2028,7 @@ void stray_menu_set_item_enabled(
     icon = get_root_icon(menu);
 
     if (icon) {
-        item = find_menu_item_recursive(icon->menu, item_id);
+        item = find_menu_item(icon->menu, item_id);
     } else {
         item = find_menu_item(menu, item_id);
     }
@@ -2068,7 +2053,7 @@ void stray_menu_set_item_label(TrayMenu *menu, int item_id, const char *label) {
     icon = get_root_icon(menu);
 
     if (icon) {
-        item = find_menu_item_recursive(icon->menu, item_id);
+        item = find_menu_item(icon->menu, item_id);
     } else {
         item = find_menu_item(menu, item_id);
     }
@@ -2104,7 +2089,7 @@ void stray_menu_set_item_icon(
     icon = get_root_icon(menu);
 
     if (icon) {
-        item = find_menu_item_recursive(icon->menu, item_id);
+        item = find_menu_item(icon->menu, item_id);
     } else {
         item = find_menu_item(menu, item_id);
     }
