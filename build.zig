@@ -95,9 +95,4 @@ pub fn build(b: *std.Build) void {
 
     const build_docs_step = b.step("docs", "Build the library documentation");
     build_docs_step.dependOn(&build_docs.step);
-
-    const clean_step = b.step("clean", "Clean up the project directory");
-    clean_step.dependOn(&b.addRemoveDirTree(b.path("docs")).step);
-    clean_step.dependOn(&b.addRemoveDirTree(b.path("zig-out")).step);
-    clean_step.dependOn(&b.addRemoveDirTree(b.path(".zig-cache")).step);
 }
