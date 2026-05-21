@@ -4,29 +4,39 @@ const Proc = struct {
     err: []u8,
 };
 
-fn runner(args: [1][]const u8) !Proc {
-    var proc = std.process.Child.init(&args, allocator);
+fn runner(args: [1][]const u8, io: std.Io) !Proc {
+    var proc = try std.process.spawn(io, .{
+        .argv = &args,
+        .stdin = .pipe,
+        .stdout = .pipe,
+        .stderr = .pipe,
+    });
 
-    proc.stdout_behavior = .Pipe;
-    proc.stderr_behavior = .Pipe;
+    var out_rbuf: [4096]u8 = undefined;
+    var err_rbuf: [4096]u8 = undefined;
+    var out_reader = proc.stdout.?.reader(io, &out_rbuf);
+    var err_reader = proc.stderr.?.reader(io, &err_rbuf);
+    var out: []u8 = &.{};
+    var err: []u8 = &.{};
+    var group: std.Io.Group = .init;
 
-    var stdout: std.ArrayListAlignedUnmanaged(u8, null) = .empty;
-    var stderr: std.ArrayListAlignedUnmanaged(u8, null) = .empty;
-    defer {
-        stdout.deinit(allocator);
-        stderr.deinit(allocator);
-    }
+    group.async(io, struct {
+        fn f(r: *std.Io.Reader, result: *[]u8) void {
+            result.* = r.readAlloc(allocator, 13312) catch &.{};
+        }
+    }.f, .{ &out_reader.interface, &out });
 
-    try proc.spawn();
-    try proc.collectOutput(allocator, &stdout, &stderr, 13312);
+    group.async(io, struct {
+        fn f(r: *std.Io.Reader, result: *[]u8) void {
+            result.* = r.readAlloc(allocator, 13312) catch &.{};
+        }
+    }.f, .{ &err_reader.interface, &err });
 
-    const term = try proc.wait();
-    const out = try stdout.toOwnedSlice(allocator);
-    const err = try stderr.toOwnedSlice(allocator);
+    try group.await(io);
 
+    const term = try proc.wait(io);
     if (err.len > 0) std.debug.print("{s}\n", .{err});
-
-    return Proc{ .term = term, .out = out, .err = err };
+    return .{ .term = term, .out = out, .err = err };
 }
 
 test "app" {
@@ -34,17 +44,16 @@ test "app" {
         test_app,
     };
 
-    const proc = try runner(argv);
+    const proc = try runner(argv, std.testing.io);
     defer {
         allocator.free(proc.out);
         allocator.free(proc.err);
     }
 
-    try std.testing.expectEqual(proc.term.Exited, 0);
+    try std.testing.expectEqual(proc.term.exited, 0);
 }
 
 const std = @import("std");
 const allocator = std.testing.allocator;
-
 const build_options = @import("build_options");
 const test_app = build_options.test_app_path;

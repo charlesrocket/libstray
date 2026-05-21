@@ -1,7 +1,8 @@
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
+
+    var io: std.Io.Threaded = .init_single_threaded;
+    defer io.deinit();
 
     var is_active = true;
     var is_checked = false;
@@ -59,7 +60,7 @@ pub fn main() !void {
         count += 1;
         icon.setMenuItemChecked(checked_item, !is_checked);
         icon.processEvents();
-        std.Thread.sleep(10 * std.time.ns_per_ms);
+        io.io().sleep(.fromMilliseconds(100), .boot) catch {};
     }
 }
 
