@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.1] - 2026-05-21
+
+### Bug Fixes
+
+- Empty payload clears pixmap
+- Update `main()`
+- Update test runner
+
+### Operations
+
+- Bump actions/deploy-pages from 4.0.5 to 5.0.0
+- Bump actions/configure-pages from 5.0.0 to 6.0.0
+- Bump actions/upload-pages-artifact from 4.0.0 to 5.0.0
+- Bump zig to 0.16
+
+### Refactor
+
+- Add `emit_signal_string()`
+- Drop redundant ternary
+- Add `status_to_string()`
+- Recursive `find_menu_item()`
+- Add `notify_item_changed()`
+
+### Styling
+
+- Improve alignments
+
+### Build
+
+- Drop `clean`
+- Bump MSZV to 0.16
+
 ## [0.4.0] - 2026-03-21
 
 ### Bug Fixes
