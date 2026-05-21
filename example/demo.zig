@@ -13,10 +13,8 @@ const RadioGroup = struct {
     option3_id: i32 = -1,
 };
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
     var is_active = true;
     var is_checked = false;
 
