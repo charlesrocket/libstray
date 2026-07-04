@@ -21,14 +21,14 @@ jobs:
           version: ${{ env.ZIG_VERSION }}
 
       - name: Install dependencies
-        run: sudo apt install -y libdbus-1-dev
+        run: sudo apt update && sudo apt install -y libdbus-1-dev
 
       - name: Run tests
         run: |
-          zig build test --verbose --summary all
+          dbus-run-session -- zig build test --verbose --summary all
 
   demo-linux:
-    name: Demo
+    name: Demo | ${{ matrix.mode }}
     runs-on: codeberg-medium
     strategy:
       fail-fast: false
@@ -47,7 +47,7 @@ jobs:
           version: ${{ env.ZIG_VERSION }}
 
       - name: Install dependencies
-        run: sudo apt install -y libdbus-1-dev
+        run: sudo apt update && sudo apt install -y libdbus-1-dev
 
       - name: Build demo
         run: |
@@ -55,8 +55,8 @@ jobs:
 
   lint:
     name: Format
-    runs-on: codeberg-medium
-    if: "!startsWith(github.ref, 'refs/tags/')"
+    runs-on: codeberg-tiny
+    if: forgejo.ref_type != 'tag'
 
     steps:
       - name: Checkout
@@ -80,9 +80,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
       - name: Extract changelog
         env:
           TAG: ${{ forgejo.ref_name }}
+
         run: |
           VERSION="${TAG#v}"
           awk -v ver="$VERSION" '
@@ -93,6 +97,7 @@ jobs:
             }
             found { print }
           ' CHANGELOG.md > release-notes.md
+
       - name: Publish
         uses: https://data.forgejo.org/actions/forgejo-release@v2.13.1
         with:
