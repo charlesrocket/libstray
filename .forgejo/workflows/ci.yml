@@ -2,26 +2,21 @@
 name: CI
 "on": [push, pull_request]
 
-permissions:
-  id-token: write
-  contents: read
-  attestations: read
-
 env:
   ZIG_VERSION: 0.16.0
 
 jobs:
   test-linux:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: codeberg-medium
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       - name: Install Zig
-        uses: mlugg/setup-zig@v2
+        uses: https://github.com/mlugg/setup-zig@v2
         with:
           version: ${{ env.ZIG_VERSION }}
 
@@ -34,7 +29,7 @@ jobs:
 
   demo-linux:
     name: Demo
-    runs-on: ubuntu-latest
+    runs-on: codeberg-medium
     strategy:
       fail-fast: false
       matrix:
@@ -42,12 +37,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       - name: Install Zig
-        uses: mlugg/setup-zig@v2
+        uses: https://github.com/mlugg/setup-zig@v2
         with:
           version: ${{ env.ZIG_VERSION }}
 
@@ -60,17 +55,17 @@ jobs:
 
   lint:
     name: Format
-    runs-on: ubuntu-latest
+    runs-on: codeberg-medium
     if: "!startsWith(github.ref, 'refs/tags/')"
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       - name: Install Zig
-        uses: mlugg/setup-zig@v2
+        uses: https://github.com/mlugg/setup-zig@v2
         with:
           version: ${{ env.ZIG_VERSION }}
 
@@ -79,17 +74,28 @@ jobs:
 
   release:
     name: Release
-    needs: [test-linux, demo-linux]
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-      pages: write
-
-    if: |
-      github.repository_owner == 'charlesrocket' &&
-      startsWith(github.ref, 'refs/tags/')
-
-    uses: ./.github/workflows/cd.yml
-    with:
-      tag_name: ${{ github.ref_name }}
+    needs: ["test-linux", "demo-linux"]
+    runs-on: codeberg-tiny
+    if: ${{ forgejo.ref_type == 'tag' && forgejo.repository_owner == 'charlesrocket' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Extract changelog
+        env:
+          TAG: ${{ forgejo.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          awk -v ver="$VERSION" '
+            /^## \[/ {
+              if (found) exit
+              if ($0 ~ "\\[" ver "\\]") { found=1; next }
+              next
+            }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+      - name: Publish
+        uses: https://data.forgejo.org/actions/forgejo-release@v2.13.1
+        with:
+          direction: upload
+          release-notes-file: release-notes.md
+          skip-assets: true
