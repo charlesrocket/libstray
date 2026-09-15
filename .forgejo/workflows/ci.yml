@@ -55,7 +55,7 @@ jobs:
 
   lint:
     name: Format
-    runs-on: codeberg-tiny
+    runs-on: codeberg-small
     if: forgejo.ref_type != 'tag'
 
     steps:
@@ -74,7 +74,8 @@ jobs:
 
   docs:
     name: Docs
-    runs-on: codeberg-tiny
+    runs-on: codeberg-small
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
