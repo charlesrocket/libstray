@@ -72,6 +72,33 @@ jobs:
       - name: Check formatting
         run: zig fmt --check .
 
+  docs:
+    name: Docs
+    runs-on: codeberg-tiny
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install Zig
+        uses: https://github.com/mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+
+      - name: Install dependencies
+        run: sudo apt update && sudo apt install -y libdbus-1-dev
+
+      - name: Build documentation
+        run: zig build docs
+
+      - name: Upload artifacts
+        uses: https://codeberg.org/git-pages/action@v2
+        with:
+          site: https://${{ forge.repository_owner }}.codeberg.page/libstray/
+          token: ${{ forge.token }}
+          source: docs/
+
   release:
     name: Create release
     needs: ["test-linux", "demo-linux"]
