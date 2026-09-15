@@ -75,6 +75,7 @@ jobs:
   docs:
     name: Docs
     runs-on: codeberg-small
+    if: forgejo.ref_type == 'tag'
 
     steps:
       - name: Checkout
