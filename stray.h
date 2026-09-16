@@ -334,7 +334,7 @@ static void add_pixmap_array(DBusMessageIter *variant, TrayIcon *icon) {
 
 static void add_tooltip_struct(DBusMessageIter *variant, TrayIcon *icon) {
     DBusMessageIter struct_iter, array_iter;
-    const char *icon_name = "";
+    const char *empty = "";
     const char *title = icon->tooltip_title ? icon->tooltip_title : "";
     const char *text = icon->tooltip_text ? icon->tooltip_text : "";
 
@@ -342,7 +342,7 @@ static void add_tooltip_struct(DBusMessageIter *variant, TrayIcon *icon) {
         variant, DBUS_TYPE_STRUCT, NULL, &struct_iter
     );
 
-    dbus_message_iter_append_basic(&struct_iter, DBUS_TYPE_STRING, &icon_name);
+    dbus_message_iter_append_basic(&struct_iter, DBUS_TYPE_STRING, &empty);
     dbus_message_iter_open_container(
         &struct_iter, DBUS_TYPE_ARRAY, "(iiay)", &array_iter
     );
