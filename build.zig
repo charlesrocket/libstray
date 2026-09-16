@@ -20,7 +20,6 @@ pub fn build(b: *std.Build) void {
     lib_mod.addIncludePath(b.path("."));
     lib_mod.addCSourceFile(.{
         .file = b.path("wrapper.c"),
-        .flags = &.{"-std=c99"},
     });
 
     b.installArtifact(lib);
