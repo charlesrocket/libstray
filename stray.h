@@ -1,7 +1,11 @@
-/* stray.h - library for system tray icons */
+/* stray.h - system tray icons via dbus */
 
 #ifndef STRAY_H
 #define STRAY_H
+
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -287,22 +291,19 @@ static void add_pixmap_array(DBusMessageIter *variant, TrayIcon *icon) {
     );
 
     if (icon && icon->icon_pixmaps && icon->icon_pixmap_count > 0) {
-        int i;
-        for (i = 0; i < icon->icon_pixmap_count; i++) {
-            dbus_int32_t width;
-            dbus_int32_t height;
+        for (int i = 0; i < icon->icon_pixmap_count; i++) {
             StrayPixmap *pixmap = &icon->icon_pixmaps[i];
 
             dbus_message_iter_open_container(
                 &pixmap_array, DBUS_TYPE_STRUCT, NULL, &pixmap_struct
             );
 
-            width = pixmap->width;
+            dbus_int32_t width = pixmap->width;
             dbus_message_iter_append_basic(
                 &pixmap_struct, DBUS_TYPE_INT32, &width
             );
 
-            height = pixmap->height;
+            dbus_int32_t height = pixmap->height;
             dbus_message_iter_append_basic(
                 &pixmap_struct, DBUS_TYPE_INT32, &height
             );
@@ -367,11 +368,9 @@ static void get_icon_properties(
 }
 
 static void emit_signal(TrayIcon *icon, const char *signal_name) {
-    DBusMessage *msg;
-
     if (!icon) return;
 
-    msg = dbus_message_new_signal(
+    DBusMessage *msg = dbus_message_new_signal(
         STRAY_OBJECT_PATH, STRAY_INTERFACE_NAME, signal_name
     );
 
@@ -384,11 +383,9 @@ static void emit_signal(TrayIcon *icon, const char *signal_name) {
 
 static void
 emit_signal_string(TrayIcon *icon, const char *signal_name, const char *value) {
-    DBusMessage *msg;
-
     if (!icon || !value) return;
 
-    msg = dbus_message_new_signal(
+    DBusMessage *msg = dbus_message_new_signal(
         STRAY_OBJECT_PATH, STRAY_INTERFACE_NAME, signal_name
     );
 
@@ -403,43 +400,38 @@ emit_signal_string(TrayIcon *icon, const char *signal_name, const char *value) {
 }
 
 static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
-    const char *interface;
-    const char *current_icon;
-    const char *current_title;
-    const char *menu_path;
-    const char *id_str;
-    const char *status_str;
-    const char *empty_str;
-    DBusMessageIter args, changed_props, invalidated_props;
-    DBusMessage *msg;
-    dbus_bool_t item_is_menu;
-    dbus_uint32_t window_id;
-    int all;
-
     if (!icon) return;
 
-    msg = dbus_message_new_signal(
+    DBusMessage *msg = dbus_message_new_signal(
         STRAY_OBJECT_PATH, "org.freedesktop.DBus.Properties",
         "PropertiesChanged"
     );
 
     if (!msg) return;
 
+    const char *current_icon;
+    const char *current_title;
+    const char *menu_path;
+    const char *id_str;
+    const char *status_str;
+    dbus_bool_t item_is_menu;
+    dbus_uint32_t window_id;
+
     get_icon_properties(
         icon, &current_icon, &current_title, &menu_path, &item_is_menu, &id_str,
         &status_str, &window_id
     );
 
-    interface = STRAY_INTERFACE_NAME;
-    empty_str = "";
+    const char *interface = STRAY_INTERFACE_NAME;
 
+    DBusMessageIter args, changed_props, invalidated_props;
     dbus_message_iter_init_append(msg, &args);
     dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, &interface);
     dbus_message_iter_open_container(
         &args, DBUS_TYPE_ARRAY, "{sv}", &changed_props
     );
 
-    all = strcmp(property_name, "All") == 0;
+    int all = strcmp(property_name, "All") == 0;
 
     if (all || strcmp(property_name, "IconName") == 0)
         add_dict_entry(
@@ -522,8 +514,7 @@ static void emit_properties_changed(TrayIcon *icon, const char *property_name) {
 static void stray_free_icon_pixmap(TrayIcon *icon) {
     if (!icon || !icon->icon_pixmaps) return;
 
-    int i;
-    for (i = 0; i < icon->icon_pixmap_count; i++)
+    for (int i = 0; i < icon->icon_pixmap_count; i++)
         free(icon->icon_pixmaps[i].data);
 
     free(icon->icon_pixmaps);
@@ -532,20 +523,17 @@ static void stray_free_icon_pixmap(TrayIcon *icon) {
 }
 
 static TrayMenuItem *find_menu_item(TrayMenu *menu, dbus_int32_t id) {
-    int i;
-    TrayMenuItem *item;
-
     if (!menu) return NULL;
 
     /* check items in this menu */
-    for (i = 0; i < menu->item_count; i++) {
+    for (int i = 0; i < menu->item_count; i++) {
         if (menu->items[i] && menu->items[i]->id == id) {
             return menu->items[i];
         }
 
         /* check submenu presence */
         if (menu->items[i] && menu->items[i]->submenu) {
-            item = find_menu_item(menu->items[i]->submenu, id);
+            TrayMenuItem *item = find_menu_item(menu->items[i]->submenu, id);
             if (item) return item;
         }
     }
@@ -564,14 +552,11 @@ static TrayIcon *get_root_icon(TrayMenu *menu) {
 }
 
 static void emit_layout_updated(TrayIcon *icon, dbus_int32_t parent_id) {
-    DBusMessage *msg;
-    dbus_uint32_t revision;
-
     if (!icon || !icon->menu) return;
 
-    revision = icon->menu->revision;
+    dbus_uint32_t revision = icon->menu->revision;
 
-    msg = dbus_message_new_signal(
+    DBusMessage *msg = dbus_message_new_signal(
         STRAY_MENU_OBJECT_PATH, STRAY_DBUSMENU_INTERFACE, "LayoutUpdated"
     );
 
@@ -588,8 +573,6 @@ static void emit_layout_updated(TrayIcon *icon, dbus_int32_t parent_id) {
 
 static void
 add_menu_item_properties(DBusMessageIter *props, TrayMenuItem *item) {
-    dbus_bool_t visible;
-
     if (item->type == STRAY_MENU_ITEM_SEPARATOR) {
         const char *type_value = "separator";
         add_dict_entry(props, "type", DBUS_TYPE_STRING, "s", &type_value);
@@ -601,7 +584,7 @@ add_menu_item_properties(DBusMessageIter *props, TrayMenuItem *item) {
 
     add_dict_entry(props, "enabled", DBUS_TYPE_BOOLEAN, "b", &item->enabled);
 
-    visible = TRUE;
+    dbus_bool_t visible = TRUE;
     add_dict_entry(props, "visible", DBUS_TYPE_BOOLEAN, "b", &visible);
 
     /* add icon-name if present */
@@ -621,8 +604,6 @@ add_menu_item_properties(DBusMessageIter *props, TrayMenuItem *item) {
 
     if (item->type == STRAY_MENU_ITEM_CHECK
         || item->type == STRAY_MENU_ITEM_RADIO) {
-        dbus_int32_t toggle_state;
-
         const char *toggle_type =
             (item->type == STRAY_MENU_ITEM_CHECK) ? "checkmark" : "radio";
 
@@ -630,7 +611,7 @@ add_menu_item_properties(DBusMessageIter *props, TrayMenuItem *item) {
             props, "toggle-type", DBUS_TYPE_STRING, "s", &toggle_type
         );
 
-        toggle_state = item->checked ? 1 : 0;
+        dbus_int32_t toggle_state = item->checked ? 1 : 0;
 
         add_dict_entry(
             props, "toggle-state", DBUS_TYPE_INT32, "i", &toggle_state
@@ -639,25 +620,22 @@ add_menu_item_properties(DBusMessageIter *props, TrayMenuItem *item) {
 }
 
 static void emit_menu_items_updated(TrayIcon *icon, int *item_ids, int count) {
-    DBusMessage *msg;
-    DBusMessageIter args, updated_array, removed_array;
-    int i;
-
     if (!icon || !icon->menu) return;
 
-    msg = dbus_message_new_signal(
+    DBusMessage *msg = dbus_message_new_signal(
         STRAY_MENU_OBJECT_PATH, STRAY_DBUSMENU_INTERFACE,
         "ItemsPropertiesUpdated"
     );
 
     if (!msg) return;
 
+    DBusMessageIter args, updated_array, removed_array;
     dbus_message_iter_init_append(msg, &args);
     dbus_message_iter_open_container(
         &args, DBUS_TYPE_ARRAY, "(ia{sv})", &updated_array
     );
 
-    for (i = 0; i < count; i++) {
+    for (int i = 0; i < count; i++) {
         /* find items in submenus */
         TrayMenuItem *item = find_menu_item(icon->menu, item_ids[i]);
 
@@ -695,30 +673,25 @@ static void emit_menu_items_updated(TrayIcon *icon, int *item_ids, int count) {
 static void handle_property_get_all(
     DBusConnection *conn, DBusMessage *msg, TrayIcon *icon
 ) {
-    DBusMessageIter args, array, dict_entry, variant;
-    const char *prop_menu;
-    const char *current_icon, *current_title, *menu_path, *id_str;
-    const char *category_str;
-    const char *status_str;
-    const char *empty_str;
-    const char *prop_pixmap;
-    const char *prop_tooltip;
-    dbus_bool_t item_is_menu;
-    dbus_uint32_t window_id;
-
     DBusMessage *reply = dbus_message_new_method_return(msg);
     if (!reply) return;
+
+    const char *current_icon, *current_title, *menu_path, *id_str;
+    const char *status_str;
+    dbus_bool_t item_is_menu;
+    dbus_uint32_t window_id;
 
     get_icon_properties(
         icon, &current_icon, &current_title, &menu_path, &item_is_menu, &id_str,
         &status_str, &window_id
     );
 
+    DBusMessageIter args, array;
     dbus_message_iter_init_append(reply, &args);
     dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "{sv}", &array);
 
-    category_str = "ApplicationStatus";
-    empty_str = "";
+    const char *category_str = "ApplicationStatus";
+    const char *empty_str = "";
 
     /* add standard properties */
     add_dict_entry(&array, "Category", DBUS_TYPE_STRING, "s", &category_str);
@@ -730,7 +703,8 @@ static void handle_property_get_all(
     add_dict_entry(&array, "WindowId", DBUS_TYPE_UINT32, "u", &icon->window_id);
 
     /* add IconPixmap property */
-    prop_pixmap = "IconPixmap";
+    const char *prop_pixmap = "IconPixmap";
+    DBusMessageIter dict_entry, variant;
     dbus_message_iter_open_container(
         &array, DBUS_TYPE_DICT_ENTRY, NULL, &dict_entry
     );
@@ -745,7 +719,7 @@ static void handle_property_get_all(
     dbus_message_iter_close_container(&array, &dict_entry);
 
     /* add Menu property */
-    prop_menu = "Menu";
+    const char *prop_menu = "Menu";
     dbus_message_iter_open_container(
         &array, DBUS_TYPE_DICT_ENTRY, NULL, &dict_entry
     );
@@ -763,7 +737,7 @@ static void handle_property_get_all(
     add_dict_entry(&array, "ItemIsMenu", DBUS_TYPE_BOOLEAN, "b", &item_is_menu);
 
     /* add ToolTip property */
-    prop_tooltip = "ToolTip";
+    const char *prop_tooltip = "ToolTip";
     dbus_message_iter_open_container(
         &array, DBUS_TYPE_DICT_ENTRY, NULL, &dict_entry
     );
@@ -789,14 +763,13 @@ static void handle_property_get(
 ) {
     DBusMessage *reply = dbus_message_new_method_return(msg);
     DBusMessageIter args;
-    const char *current_icon, *current_title, *menu_path, *id_str;
-    const char *category_str;
-    const char *status_str;
-    const char *theme_path;
-    dbus_bool_t item_is_menu;
-    dbus_uint32_t window_id;
 
     if (!reply) return;
+
+    const char *current_icon, *current_title, *menu_path, *id_str;
+    const char *status_str;
+    dbus_bool_t item_is_menu;
+    dbus_uint32_t window_id;
 
     get_icon_properties(
         icon, &current_icon, &current_title, &menu_path, &item_is_menu, &id_str,
@@ -805,8 +778,8 @@ static void handle_property_get(
 
     dbus_message_iter_init_append(reply, &args);
 
-    category_str = "ApplicationStatus";
-    theme_path = "";
+    const char *category_str = "ApplicationStatus";
+    const char *theme_path = "";
 
     if (strcmp(prop, "Category") == 0) {
         add_variant(&args, DBUS_TYPE_STRING, "s", &category_str);
@@ -871,11 +844,9 @@ static void handle_property_get(
 
 static void
 add_menu_items_recursive(DBusMessageIter *parent_children, TrayMenu *menu) {
-    int i;
-
     if (!menu) return;
 
-    for (i = 0; i < menu->item_count; i++) {
+    for (int i = 0; i < menu->item_count; i++) {
         DBusMessageIter child_variant, child_struct, child_props,
             child_children;
         TrayMenuItem *item = menu->items[i];
@@ -914,10 +885,9 @@ add_menu_items_recursive(DBusMessageIter *parent_children, TrayMenu *menu) {
 
 static int watcher_exists(DBusConnection *conn) {
     DBusError err;
-    int exists;
-
     dbus_error_init(&err);
-    exists = dbus_bus_name_has_owner(conn, STRAY_WATCHER_SERVICE, &err);
+
+    int exists = dbus_bus_name_has_owner(conn, STRAY_WATCHER_SERVICE, &err);
 
     if (dbus_error_is_set(&err)) {
         dbus_error_free(&err);
@@ -929,9 +899,6 @@ static int watcher_exists(DBusConnection *conn) {
 
 static int
 register_with_watcher(DBusConnection *conn, const char *service_name) {
-    int success;
-    DBusError err;
-    DBusMessage *reply;
     DBusMessage *msg = dbus_message_new_method_call(
         STRAY_WATCHER_SERVICE, STRAY_WATCHER_PATH, STRAY_WATCHER_SERVICE,
         "RegisterStatusNotifierItem"
@@ -943,8 +910,10 @@ register_with_watcher(DBusConnection *conn, const char *service_name) {
         msg, DBUS_TYPE_STRING, &service_name, DBUS_TYPE_INVALID
     );
 
+    DBusError err;
     dbus_error_init(&err);
-    reply = dbus_connection_send_with_reply_and_block(conn, msg, 5000, &err);
+    DBusMessage *reply =
+        dbus_connection_send_with_reply_and_block(conn, msg, 5000, &err);
     dbus_message_unref(msg);
 
     if (dbus_error_is_set(&err)) {
@@ -955,7 +924,7 @@ register_with_watcher(DBusConnection *conn, const char *service_name) {
 
     if (!reply) return 0;
 
-    success = (dbus_message_get_type(reply) != DBUS_MESSAGE_TYPE_ERROR);
+    int success = (dbus_message_get_type(reply) != DBUS_MESSAGE_TYPE_ERROR);
     if (!success) {
         fprintf(
             stderr, "RegisterStatusNotifierItem failed: %s\n",
@@ -971,25 +940,25 @@ static DBusHandlerResult
 handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     DBusMessageIter args, root_struct, root_props, root_children;
     DBusMessage *reply;
-    dbus_int32_t parent_id;
-    dbus_int32_t recursion_depth;
     dbus_uint32_t revision;
-    DBusMessageIter iter;
-    const char *prop_value;
-    TrayMenu *target_menu;
 
     if (!icon || !icon->menu) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
     /* read the parent_id parameter */
+    DBusMessageIter iter;
     if (!dbus_message_iter_init(msg, &iter))
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
+    dbus_int32_t parent_id;
     dbus_message_iter_get_basic(&iter, &parent_id);
     dbus_message_iter_next(&iter);
+
+    dbus_int32_t recursion_depth;
     dbus_message_iter_get_basic(&iter, &recursion_depth);
     dbus_message_iter_next(&iter);
 
     /* determine which menu to show based on parent_id */
+    TrayMenu *target_menu;
     if (parent_id == 0) {
         target_menu = icon->menu;
     } else {
@@ -1048,7 +1017,7 @@ handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
         &root_struct, DBUS_TYPE_ARRAY, "{sv}", &root_props
     );
 
-    prop_value = "submenu";
+    const char *prop_value = "submenu";
     add_dict_entry(
         &root_props, "children-display", DBUS_TYPE_STRING, "s", &prop_value
     );
@@ -1074,7 +1043,6 @@ handle_menu_event(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     dbus_int32_t id;
     const char *type;
     DBusMessageIter iter;
-    DBusMessage *reply;
 
     if (!icon || !icon->menu) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
@@ -1093,7 +1061,7 @@ handle_menu_event(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
         if (item && item->callback) { item->callback(id, item->user_data); }
     }
 
-    reply = dbus_message_new_method_return(msg);
+    DBusMessage *reply = dbus_message_new_method_return(msg);
 
     if (reply) {
         dbus_connection_send(conn, reply, NULL);
@@ -1164,14 +1132,12 @@ static DBusHandlerResult handle_menu_get_group_properties(
 
 static DBusHandlerResult
 menu_message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
-    const char *interface;
-    const char *member;
     TrayIcon *icon = (TrayIcon *)data;
 
     if (!icon) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-    interface = dbus_message_get_interface(msg);
-    member = dbus_message_get_member(msg);
+    const char *interface = dbus_message_get_interface(msg);
+    const char *member = dbus_message_get_member(msg);
 
     if (interface && strcmp(interface, "org.freedesktop.DBus.Properties") == 0) {
         if (strcmp(member, "GetAll") == 0) {
@@ -1269,14 +1235,12 @@ menu_message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
 
 static DBusHandlerResult
 message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
-    const char *interface;
-    const char *member;
     TrayIcon *icon = (TrayIcon *)data;
 
     if (!icon) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-    interface = dbus_message_get_interface(msg);
-    member = dbus_message_get_member(msg);
+    const char *interface = dbus_message_get_interface(msg);
+    const char *member = dbus_message_get_member(msg);
 
     if (!interface || !member) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
@@ -1400,24 +1364,22 @@ message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
 }
 
 static void process_events_with_timeout(DBusConnection *conn, int timeout_ms) {
-    struct timespec start_time, current_time;
-    long elapsed_ms;
-    int remaining_ms;
-
     if (!conn) return;
 
+    struct timespec start_time;
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 
-    while (1) {
+    for (;;) {
         DBusDispatchStatus status;
+        struct timespec current_time;
 
         clock_gettime(CLOCK_MONOTONIC, &current_time);
-        elapsed_ms = (current_time.tv_sec - start_time.tv_sec) * 1000
-                   + (current_time.tv_nsec - start_time.tv_nsec) / 1000000;
+        long elapsed_ms = (current_time.tv_sec - start_time.tv_sec) * 1000
+                        + (current_time.tv_nsec - start_time.tv_nsec) / 1000000;
 
         if (elapsed_ms >= timeout_ms) break;
 
-        remaining_ms = timeout_ms - (int)elapsed_ms;
+        int remaining_ms = timeout_ms - (int)elapsed_ms;
         dbus_connection_read_write(conn, remaining_ms);
 
         do {
@@ -1461,14 +1423,13 @@ connection_filter(DBusConnection *conn, DBusMessage *msg, void *data) {
 
 static int menu_ensure_capacity(TrayMenu *menu) {
     if (menu->item_count >= menu->item_capacity) {
-        int i;
         int new_capacity = menu->item_capacity * 2;
         TrayMenuItem **new_items =
             realloc(menu->items, new_capacity * sizeof(TrayMenuItem *));
 
         if (!new_items) return 0;
 
-        for (i = menu->item_capacity; i < new_capacity; i++) {
+        for (int i = menu->item_capacity; i < new_capacity; i++) {
             new_items[i] = NULL;
         }
 
@@ -1483,11 +1444,9 @@ static TrayMenuItem *create_menu_item(
     TrayMenu *menu, const char *label, TrayMenuItemType type,
     TrayMenuCallback callback, void *user_data
 ) {
-    TrayMenuItem *item;
-
     if (!menu_ensure_capacity(menu)) return NULL;
 
-    item = calloc(1, sizeof(TrayMenuItem));
+    TrayMenuItem *item = calloc(1, sizeof(TrayMenuItem));
 
     if (!item) return NULL;
 
@@ -1518,11 +1477,9 @@ static TrayMenuItem *create_menu_item(
 }
 
 static void stray_menu_destroy(TrayMenu *menu) {
-    int i;
-
     if (!menu) return;
 
-    for (i = 0; i < menu->item_count; i++) {
+    for (int i = 0; i < menu->item_count; i++) {
         if (menu->items[i]) {
             if (menu->items[i]->submenu) {
                 stray_menu_destroy(menu->items[i]->submenu);
@@ -1547,23 +1504,15 @@ int stray_get_fd(TrayIcon *icon) {
 
 TrayIcon *
 stray_create(const char *app_name, const char *icon_name, const char *title) {
-    char service_name[256];
-    TrayIcon *icon;
-    DBusConnection *conn;
-    DBusObjectPathVTable vtable;
-    DBusObjectPathVTable menu_vtable;
-    DBusError err;
-    int instance_id;
-    int ret;
-
     if (!app_name) {
         fprintf(stderr, "Error: app_name cannot be NULL!\n");
         return NULL;
     }
 
+    DBusError err;
     dbus_error_init(&err);
 
-    conn = dbus_bus_get(DBUS_BUS_SESSION, &err);
+    DBusConnection *conn = dbus_bus_get(DBUS_BUS_SESSION, &err);
 
     if (dbus_error_is_set(&err)) {
         fprintf(
@@ -1574,14 +1523,15 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
         return NULL;
     }
 
-    instance_id = ++stray_instance_counter;
+    int instance_id = ++stray_instance_counter;
 
+    char service_name[256];
     snprintf(
         service_name, sizeof(service_name), "org.kde.StatusNotifierItem-%d-%d",
         getpid(), instance_id
     );
 
-    ret = dbus_bus_request_name(
+    int ret = dbus_bus_request_name(
         conn, service_name, DBUS_NAME_FLAG_REPLACE_EXISTING, &err
     );
 
@@ -1601,7 +1551,7 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
         return NULL;
     }
 
-    icon = calloc(1, sizeof(TrayIcon));
+    TrayIcon *icon = calloc(1, sizeof(TrayIcon));
 
     if (!icon) {
         dbus_connection_unref(conn);
@@ -1635,6 +1585,7 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
         return NULL;
     }
 
+    DBusObjectPathVTable vtable;
     vtable.unregister_function = NULL;
     vtable.message_function = message_handler;
 
@@ -1646,6 +1597,7 @@ stray_create(const char *app_name, const char *icon_name, const char *title) {
         return NULL;
     }
 
+    DBusObjectPathVTable menu_vtable;
     menu_vtable.unregister_function = NULL,
     menu_vtable.message_function = menu_message_handler;
 
@@ -1800,14 +1752,11 @@ void stray_set_window_id(TrayIcon *icon, dbus_uint32_t window_id) {
 void stray_set_icon_pixmap(
     TrayIcon *icon, int width, int height, const uint32_t *data
 ) {
-    size_t pixel_count = 0;
-    size_t data_size = 0;
-
     if (!icon) return;
 
     if (data && width > 0 && height > 0) {
-        pixel_count = (size_t)width * (size_t)height;
-        data_size = pixel_count * sizeof(uint32_t);
+        size_t pixel_count = (size_t)width * (size_t)height;
+        size_t data_size = pixel_count * sizeof(uint32_t);
 
         if (data_size >= DBUS_MAXIMUM_MESSAGE_LENGTH - 4096) {
             fprintf(
@@ -1833,8 +1782,8 @@ void stray_set_icon_pixmap(
         }
 
         /* convert to network byte order */
-        size_t i;
-        for (i = 0; i < pixel_count; i++) pixmap->data[i] = htonl(data[i]);
+        for (size_t i = 0; i < pixel_count; i++)
+            pixmap->data[i] = htonl(data[i]);
 
         stray_free_icon_pixmap(icon);
         icon->icon_pixmaps = pixmap;
@@ -1883,11 +1832,9 @@ void stray_set_status(TrayIcon *icon, TrayStatus status) {
 }
 
 void signal_layout_update(TrayMenu *menu) {
-    TrayIcon *icon;
-
     if (!menu) return;
 
-    icon = get_root_icon(menu);
+    TrayIcon *icon = get_root_icon(menu);
     if (!icon) return;
 
     icon->menu->revision++;
@@ -1896,8 +1843,7 @@ void signal_layout_update(TrayMenu *menu) {
 
 static void notify_item_changed(TrayMenu *menu, TrayIcon *icon, int item_id) {
     if (icon) {
-        int ids[1];
-        ids[0] = item_id;
+        int ids[1] = {item_id};
         emit_menu_items_updated(icon, ids, 1);
     } else {
         signal_layout_update(menu);
@@ -1908,11 +1854,9 @@ int stray_menu_add_item(
     TrayMenu *menu, const char *label, TrayMenuCallback callback,
     void *user_data
 ) {
-    TrayMenuItem *item;
-
     if (!menu) return -1;
 
-    item = create_menu_item(
+    TrayMenuItem *item = create_menu_item(
         menu, label, STRAY_MENU_ITEM_NORMAL, callback, user_data
     );
 
@@ -1923,11 +1867,10 @@ int stray_menu_add_item(
 }
 
 int stray_menu_add_separator(TrayMenu *menu) {
-    TrayMenuItem *item;
-
     if (!menu) return -1;
 
-    item = create_menu_item(menu, NULL, STRAY_MENU_ITEM_SEPARATOR, NULL, NULL);
+    TrayMenuItem *item =
+        create_menu_item(menu, NULL, STRAY_MENU_ITEM_SEPARATOR, NULL, NULL);
 
     if (!item) return -1;
 
@@ -1939,11 +1882,9 @@ int stray_menu_add_check_item(
     TrayMenu *menu, const char *label, TrayMenuCallback callback,
     void *user_data
 ) {
-    TrayMenuItem *item;
-
     if (!menu) return -1;
 
-    item = create_menu_item(
+    TrayMenuItem *item = create_menu_item(
         menu, label, STRAY_MENU_ITEM_CHECK, callback, user_data
     );
     if (!item) return -1;
@@ -1956,11 +1897,9 @@ int stray_menu_add_radio_item(
     TrayMenu *menu, const char *label, TrayMenuCallback callback,
     void *user_data
 ) {
-    TrayMenuItem *item;
-
     if (!menu) return -1;
 
-    item = create_menu_item(
+    TrayMenuItem *item = create_menu_item(
         menu, label, STRAY_MENU_ITEM_RADIO, callback, user_data
     );
 
@@ -1973,11 +1912,10 @@ int stray_menu_add_radio_item(
 int stray_menu_add_submenu(
     TrayMenu *menu, const char *label, TrayMenu *submenu
 ) {
-    TrayMenuItem *item;
-
     if (!menu || !submenu) return -1;
 
-    item = create_menu_item(menu, label, STRAY_MENU_ITEM_NORMAL, NULL, NULL);
+    TrayMenuItem *item =
+        create_menu_item(menu, label, STRAY_MENU_ITEM_NORMAL, NULL, NULL);
 
     if (!item) return -1;
 
@@ -1990,11 +1928,9 @@ int stray_menu_add_submenu(
 }
 
 TrayMenu *stray_menu_get_submenu(TrayMenu *menu, int item_id) {
-    TrayMenuItem *item;
-
     if (!menu) return NULL;
 
-    item = find_menu_item(menu, item_id);
+    TrayMenuItem *item = find_menu_item(menu, item_id);
     if (!item) return NULL;
 
     return item->submenu;
@@ -2003,18 +1939,11 @@ TrayMenu *stray_menu_get_submenu(TrayMenu *menu, int item_id) {
 void stray_menu_set_item_checked(
     TrayMenu *menu, int item_id, dbus_bool_t checked
 ) {
-    TrayMenuItem *item;
-    TrayIcon *icon;
-
     if (!menu) return;
 
-    icon = get_root_icon(menu);
-
-    if (icon) {
-        item = find_menu_item(icon->menu, item_id);
-    } else {
-        item = find_menu_item(menu, item_id);
-    }
+    TrayIcon *icon = get_root_icon(menu);
+    TrayMenuItem *item = icon ? find_menu_item(icon->menu, item_id)
+                              : find_menu_item(menu, item_id);
 
     if (item) {
         item->checked = checked;
@@ -2025,18 +1954,11 @@ void stray_menu_set_item_checked(
 void stray_menu_set_item_enabled(
     TrayMenu *menu, int item_id, dbus_bool_t enabled
 ) {
-    TrayMenuItem *item;
-    TrayIcon *icon;
-
     if (!menu) return;
 
-    icon = get_root_icon(menu);
-
-    if (icon) {
-        item = find_menu_item(icon->menu, item_id);
-    } else {
-        item = find_menu_item(menu, item_id);
-    }
+    TrayIcon *icon = get_root_icon(menu);
+    TrayMenuItem *item = icon ? find_menu_item(icon->menu, item_id)
+                              : find_menu_item(menu, item_id);
 
     if (item) {
         item->enabled = enabled;
@@ -2045,23 +1967,14 @@ void stray_menu_set_item_enabled(
 }
 
 void stray_menu_set_item_label(TrayMenu *menu, int item_id, const char *label) {
-    TrayMenuItem *item;
-    TrayIcon *icon;
-
     if (!menu) return;
 
-    icon = get_root_icon(menu);
-
-    if (icon) {
-        item = find_menu_item(icon->menu, item_id);
-    } else {
-        item = find_menu_item(menu, item_id);
-    }
+    TrayIcon *icon = get_root_icon(menu);
+    TrayMenuItem *item = icon ? find_menu_item(icon->menu, item_id)
+                              : find_menu_item(menu, item_id);
 
     if (item) {
-        char *new_label;
-
-        new_label = label ? safe_strdup(label) : NULL;
+        char *new_label = label ? safe_strdup(label) : NULL;
 
         if (label && !new_label) return;
 
@@ -2074,18 +1987,11 @@ void stray_menu_set_item_label(TrayMenu *menu, int item_id, const char *label) {
 void stray_menu_set_item_icon(
     TrayMenu *menu, int item_id, const char *icon_name
 ) {
-    TrayMenuItem *item;
-    TrayIcon *icon;
-
     if (!menu) return;
 
-    icon = get_root_icon(menu);
-
-    if (icon) {
-        item = find_menu_item(icon->menu, item_id);
-    } else {
-        item = find_menu_item(menu, item_id);
-    }
+    TrayIcon *icon = get_root_icon(menu);
+    TrayMenuItem *item = icon ? find_menu_item(icon->menu, item_id)
+                              : find_menu_item(menu, item_id);
 
     if (item) {
         char *new_icon_name = icon_name ? safe_strdup(icon_name) : NULL;
