@@ -949,9 +949,37 @@ handle_menu_get_layout(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     if (!dbus_message_iter_init(msg, &iter))
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
+    if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_INT32) {
+        DBusMessage *error = dbus_message_new_error(
+            msg, DBUS_ERROR_INVALID_ARGS, "Expected INT32 for parentId"
+        );
+
+        if (error) {
+            dbus_connection_send(conn, error, NULL);
+            dbus_connection_flush(conn);
+            dbus_message_unref(error);
+        }
+
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
     dbus_int32_t parent_id;
     dbus_message_iter_get_basic(&iter, &parent_id);
     dbus_message_iter_next(&iter);
+
+    if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_INT32) {
+        DBusMessage *error = dbus_message_new_error(
+            msg, DBUS_ERROR_INVALID_ARGS, "Expected INT32 for recursionDepth"
+        );
+
+        if (error) {
+            dbus_connection_send(conn, error, NULL);
+            dbus_connection_flush(conn);
+            dbus_message_unref(error);
+        }
+
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
 
     dbus_int32_t recursion_depth;
     dbus_message_iter_get_basic(&iter, &recursion_depth);
@@ -1049,8 +1077,37 @@ handle_menu_event(DBusConnection *conn, DBusMessage *msg, TrayIcon *icon) {
     if (!dbus_message_iter_init(msg, &iter))
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
+    if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_INT32) {
+        DBusMessage *error = dbus_message_new_error(
+            msg, DBUS_ERROR_INVALID_ARGS, "Expected INT32 for id"
+        );
+
+        if (error) {
+            dbus_connection_send(conn, error, NULL);
+            dbus_connection_flush(conn);
+            dbus_message_unref(error);
+        }
+
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
     dbus_message_iter_get_basic(&iter, &id);
     dbus_message_iter_next(&iter);
+
+    if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING) {
+        DBusMessage *error = dbus_message_new_error(
+            msg, DBUS_ERROR_INVALID_ARGS, "Expected STRING for eventId"
+        );
+
+        if (error) {
+            dbus_connection_send(conn, error, NULL);
+            dbus_connection_flush(conn);
+            dbus_message_unref(error);
+        }
+
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
     dbus_message_iter_get_basic(&iter, &type);
     /* TODO */
     dbus_message_iter_next(&iter); /* skip data (v) */
@@ -1250,11 +1307,28 @@ message_handler(DBusConnection *conn, DBusMessage *msg, void *data) {
             handle_property_get_all(conn, msg, icon);
             return DBUS_HANDLER_RESULT_HANDLED;
         } else if (strcmp(member, "Get") == 0) {
-            const char *iface, *prop;
-            dbus_message_get_args(
-                msg, NULL, DBUS_TYPE_STRING, &iface, DBUS_TYPE_STRING, &prop,
-                DBUS_TYPE_INVALID
-            );
+            const char *iface = NULL, *prop = NULL;
+            DBusError err;
+            dbus_error_init(&err);
+
+            if (!dbus_message_get_args(
+                    msg, &err, DBUS_TYPE_STRING, &iface, DBUS_TYPE_STRING,
+                    &prop, DBUS_TYPE_INVALID
+                )) {
+                DBusMessage *error_reply = dbus_message_new_error(
+                    msg, DBUS_ERROR_INVALID_ARGS,
+                    dbus_error_is_set(&err) ? err.message : "Invalid arguments"
+                );
+
+                dbus_error_free(&err);
+                if (error_reply) {
+                    dbus_connection_send(conn, error_reply, NULL);
+                    dbus_connection_flush(conn);
+                    dbus_message_unref(error_reply);
+                }
+
+                return DBUS_HANDLER_RESULT_HANDLED;
+            }
 
             handle_property_get(conn, msg, icon, prop);
             return DBUS_HANDLER_RESULT_HANDLED;
