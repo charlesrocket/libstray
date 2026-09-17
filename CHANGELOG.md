@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.2] - 2026-09-17
+
+### Bug Fixes
+
+- Drop c99 flag
+- Add arg type checks
+
+### Documentation
+
+- Add `Contributing`
+- Drop cd badge
+
+### Operations
+
+- Bump actions/checkout from 6 to 7
+- Move test jobs
+- Use dbus session
+- Update `release`
+- Switch to git-pages
+- Bump runners to `small`
+- Deploy docs with tags
+
+### Refactor
+
+- Convert to c99
+- Fix empty string in `add_tooltip_struct()`
+
 ## [0.4.1] - 2026-05-21
 
 ### Bug Fixes
