@@ -113,17 +113,17 @@ pub const Icon = struct {
         icon_name: ?[]const u8,
         title: ?[]const u8,
     ) !Icon {
-        const app_name_z = try allocator.dupeZ(u8, app_name);
+        const app_name_z = try allocator.dupeSentinel(u8, app_name, 0);
         defer allocator.free(app_name_z);
 
         const icon_name_z = if (icon_name) |name|
-            try allocator.dupeZ(u8, name)
+            try allocator.dupeSentinel(u8, name, 0)
         else
             null;
         defer if (icon_name_z) |name| allocator.free(name);
 
         const title_z = if (title) |t|
-            try allocator.dupeZ(u8, t)
+            try allocator.dupeSentinel(u8, t, 0)
         else
             null;
         defer if (title_z) |t| allocator.free(t);
@@ -150,7 +150,7 @@ pub const Icon = struct {
 
     /// Sets the icon status.
     pub fn setStatus(self: *Icon, status: Status) void {
-        c.stray_set_status(self.handle, @intFromEnum(status));
+        c.stray_set_status(self.handle, @backingInt(status));
     }
 
     /// Sets the basic click callback.
@@ -199,7 +199,7 @@ pub const Icon = struct {
                     @ptrCast(@alignCast(data.?)),
                 );
 
-                const btn = @as(Button, @enumFromInt(button));
+                const btn = @as(Button, @fromBackingInt(@intCast(button)));
                 ctx.callback(btn, @intCast(x), @intCast(y), ctx.user_data);
             }
         };
@@ -224,7 +224,7 @@ pub const Icon = struct {
         const Wrapper = struct {
             fn call(direction: c_uint, delta: c_int, data: ?*anyopaque) callconv(.c) void {
                 const ctx = @as(*ScrollCallbackContext, @ptrCast(@alignCast(data.?)));
-                const dir = @as(ScrollDirection, @enumFromInt(direction));
+                const dir = @as(ScrollDirection, @fromBackingInt(@intCast(direction)));
 
                 ctx.callback(dir, delta, ctx.user_data);
             }
@@ -255,14 +255,14 @@ pub const Icon = struct {
 
     /// Sets the icon name.
     pub fn setIcon(self: *Icon, icon_name: []const u8) !void {
-        const icon_name_z = try self.allocator.dupeZ(u8, icon_name);
+        const icon_name_z = try self.allocator.dupeSentinel(u8, icon_name, 0);
         defer self.allocator.free(icon_name_z);
         c.stray_set_icon(self.handle, icon_name_z.ptr);
     }
 
     /// Sets the title.
     pub fn setTitle(self: *Icon, title: []const u8) !void {
-        const title_z = try self.allocator.dupeZ(u8, title);
+        const title_z = try self.allocator.dupeSentinel(u8, title, 0);
         defer self.allocator.free(title_z);
         c.stray_set_title(self.handle, title_z.ptr);
     }
@@ -271,13 +271,13 @@ pub const Icon = struct {
     /// The tooltip has a title and descriptive text.
     pub fn setTooltip(self: *Icon, title: ?[]const u8, text: ?[]const u8) !void {
         const title_z = if (title) |t|
-            try self.allocator.dupeZ(u8, t)
+            try self.allocator.dupeSentinel(u8, t, 0)
         else
             null;
         defer if (title_z) |t| self.allocator.free(t);
 
         const text_z = if (text) |txt|
-            try self.allocator.dupeZ(u8, txt)
+            try self.allocator.dupeSentinel(u8, txt, 0)
         else
             null;
         defer if (text_z) |txt| self.allocator.free(txt);
@@ -394,7 +394,7 @@ pub const Menu = struct {
         callback: MenuCallback,
         user_data: ?*anyopaque,
     ) !i32 {
-        const label_z = try self.allocator.dupeZ(u8, label);
+        const label_z = try self.allocator.dupeSentinel(u8, label, 0);
         defer self.allocator.free(label_z);
 
         const Wrapper = struct {
@@ -444,7 +444,7 @@ pub const Menu = struct {
         callback: MenuCallback,
         user_data: ?*anyopaque,
     ) !i32 {
-        const label_z = try self.allocator.dupeZ(u8, label);
+        const label_z = try self.allocator.dupeSentinel(u8, label, 0);
         defer self.allocator.free(label_z);
 
         const Wrapper = struct {
@@ -486,7 +486,7 @@ pub const Menu = struct {
         callback: MenuCallback,
         user_data: ?*anyopaque,
     ) !i32 {
-        const label_z = try self.allocator.dupeZ(u8, label);
+        const label_z = try self.allocator.dupeSentinel(u8, label, 0);
         defer self.allocator.free(label_z);
 
         const Wrapper = struct {
@@ -528,7 +528,7 @@ pub const Menu = struct {
         label: []const u8,
         submenu: *Menu,
     ) !i32 {
-        const label_z = try self.allocator.dupeZ(u8, label);
+        const label_z = try self.allocator.dupeSentinel(u8, label, 0);
         defer self.allocator.free(label_z);
 
         const id = c.stray_menu_add_submenu(
@@ -571,14 +571,14 @@ pub const Menu = struct {
 
     /// Sets a menu item's label.
     pub fn setItemLabel(self: *Menu, item_id: i32, label: []const u8) !void {
-        const label_z = try self.allocator.dupeZ(u8, label);
+        const label_z = try self.allocator.dupeSentinel(u8, label, 0);
         defer self.allocator.free(label_z);
         c.stray_menu_set_item_label(self.handle, item_id, label_z.ptr);
     }
 
     /// Sets a menu item's named icon.
     pub fn setItemIcon(self: *Menu, item_id: i32, icon_name: []const u8) !void {
-        const icon_name_z = try self.allocator.dupeZ(u8, icon_name);
+        const icon_name_z = try self.allocator.dupeSentinel(u8, icon_name, 0);
         defer self.allocator.free(icon_name_z);
         c.stray_menu_set_item_icon(self.handle, item_id, icon_name_z.ptr);
     }
