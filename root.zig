@@ -602,8 +602,5 @@ pub const Menu = struct {
     }
 };
 
-const c = @cImport({
-    @cInclude("stray.h");
-});
-
+const c = @import("c");
 const std = @import("std");

@@ -1,13 +1,25 @@
-const std = @import("std");
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+
+    const translate_c = b.dependency("translate_c", .{});
+    const translator: Translator = .init(translate_c, .{
+        .c_source_file = b.path("stray.h"),
+        .target = target,
+        .optimize = optimize,
+        .link_system_libs = &.{
+            .{ .name = "dbus-1" },
+        },
+    });
+
     const lib_mod = b.addModule("stray", .{
         .root_source_file = b.path("root.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
+        .imports = &.{
+            .{ .name = "c", .module = translator.mod },
+        },
     });
 
     const lib = b.addLibrary(.{
@@ -96,3 +108,6 @@ pub fn build(b: *std.Build) void {
     const build_docs_step = b.step("docs", "Build the library documentation");
     build_docs_step.dependOn(&build_docs.step);
 }
+
+const std = @import("std");
+const Translator = @import("translate_c").Translator;
