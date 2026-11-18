@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.3] - 2026-11-18
+
+### Bug Fixes
+
+- Update allocator functions
+
+### Miscellaneous tasks
+
+- Ignore package registry
+
+### Operations
+
+- Bump zig to 0.17
+
+### Build
+
+- Add `translate_c`
+
 ## [0.4.2] - 2026-09-17
 
 ### Bug Fixes
